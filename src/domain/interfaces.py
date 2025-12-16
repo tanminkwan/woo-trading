@@ -8,6 +8,7 @@ from .models import (
     StockPrice,
     AskingPrice,
     DailyPrice,
+    MinutePrice,
     Balance,
     Deposit,
     OrderResult,
@@ -79,6 +80,21 @@ class IStockService(ABC):
         """일별 시세 조회"""
         pass
 
+    @abstractmethod
+    def get_minute_prices(
+        self, stock_code: str, time_unit: int = 1
+    ) -> Optional[List[MinutePrice]]:
+        """분봉 시세 조회
+
+        Args:
+            stock_code: 종목코드
+            time_unit: 분봉 단위 (1, 3, 5, 10, 15, 30, 60)
+
+        Returns:
+            분봉 시세 리스트
+        """
+        pass
+
 
 class IAccountService(ABC):
     """계좌 서비스 인터페이스"""
@@ -146,6 +162,23 @@ class IHistoricalDataProvider(ABC):
 
         Returns:
             일별 시세 리스트 (날짜 오름차순)
+        """
+        pass
+
+    @abstractmethod
+    def get_minute_data(
+        self,
+        stock_code: str,
+        date: str,
+    ) -> List[MinutePrice]:
+        """분봉 시세 데이터 조회
+
+        Args:
+            stock_code: 종목코드
+            date: 조회일 (YYYYMMDD)
+
+        Returns:
+            분봉 시세 리스트 (시간 오름차순)
         """
         pass
 

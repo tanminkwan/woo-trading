@@ -85,6 +85,42 @@ class DailyPrice:
 
 
 @dataclass(frozen=True)
+class MinutePrice:
+    """분봉 시세 정보"""
+    datetime: str  # YYYYMMDDHHMMSS
+    close_price: int
+    open_price: int
+    high_price: int
+    low_price: int
+    volume: int
+
+    @property
+    def date(self) -> str:
+        """날짜 (YYYYMMDD)"""
+        return self.datetime[:8]
+
+    @property
+    def time(self) -> str:
+        """시간 (HHMMSS)"""
+        return self.datetime[8:]
+
+    @property
+    def time_formatted(self) -> str:
+        """시간 (HH:MM)"""
+        return f"{self.datetime[8:10]}:{self.datetime[10:12]}"
+
+    def to_dict(self) -> dict:
+        return {
+            "일시": self.datetime,
+            "종가": self.close_price,
+            "시가": self.open_price,
+            "고가": self.high_price,
+            "저가": self.low_price,
+            "거래량": self.volume,
+        }
+
+
+@dataclass(frozen=True)
 class Holdings:
     """보유 종목 정보"""
     stock_code: str

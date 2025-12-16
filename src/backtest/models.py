@@ -3,8 +3,11 @@ Backtest Models - 백테스트 결과 및 거래 기록 모델
 """
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 from enum import Enum
+
+if TYPE_CHECKING:
+    from ..domain.models import MinutePrice
 
 
 class TradeType(Enum):
@@ -57,6 +60,7 @@ class BacktestResult:
     win_rate: float
     trades: List[TradeRecord] = field(default_factory=list)
     strategy_params: dict = field(default_factory=dict)
+    minute_prices: List = field(default_factory=list)  # 분봉 데이터 (차트용)
 
     @property
     def is_profitable(self) -> bool:

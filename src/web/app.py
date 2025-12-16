@@ -14,7 +14,12 @@ from ..factory import KISClient
 from ..engine.config_parser import TradingConfig, StockConfig, VolatilityBreakoutParams
 from ..engine.trading_engine import TradingEngine, EngineStatus
 from ..backtest.engine import BacktestEngine
-from ..backtest.data_provider import HistoricalDataProvider, MockHistoricalDataProvider, generate_sample_data
+from ..backtest.data_provider import (
+    HistoricalDataProvider,
+    MockHistoricalDataProvider,
+    generate_sample_data,
+    generate_minute_sample_data,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -269,6 +274,7 @@ def create_app() -> FastAPI:
         capital: int = 1000000
         strategy: str = "range_trading"
         use_mock: bool = True
+        use_minute_data: bool = False  # 분봉 데이터 사용 여부
         # Range Trading params
         buy_price: Optional[int] = 0
         sell_price: Optional[int] = 0
@@ -299,12 +305,22 @@ def create_app() -> FastAPI:
             # 데이터 제공자 설정
             if request.use_mock:
                 base_price = request.buy_price if request.buy_price and request.buy_price > 0 else 50000
-                sample_data = generate_sample_data(
+                daily_data = generate_sample_data(
                     request.start_date,
                     request.end_date,
                     base_price=base_price
                 )
-                data_provider = MockHistoricalDataProvider(sample_data)
+                minute_data = None
+                if request.use_minute_data:
+                    minute_data = generate_minute_sample_data(
+                        request.start_date,
+                        request.end_date,
+                        base_price=base_price
+                    )
+                data_provider = MockHistoricalDataProvider(
+                    daily_data=daily_data,
+                    minute_data=minute_data
+                )
             else:
                 global _client
                 if not _client or not _client.is_authenticated:
@@ -312,6 +328,13 @@ def create_app() -> FastAPI:
                     if not _client.authenticate():
                         return {"success": False, "message": "API 인증 실패. Mock 데이터를 사용하세요."}
                 data_provider = HistoricalDataProvider(_client.stock)
+
+            # 일별 가격 데이터 조회 (차트용)
+            daily_prices = data_provider.get_daily_data(
+                request.stock_code,
+                request.start_date,
+                request.end_date
+            )
 
             # 백테스트 실행
             engine = BacktestEngine(data_provider)
@@ -323,7 +346,35 @@ def create_app() -> FastAPI:
                 strategy=request.strategy,
                 strategy_params=strategy_params,
                 stock_name=request.stock_name or request.stock_code,
+                use_minute_data=request.use_minute_data,
             )
+
+            # 가격 데이터 변환 (분봉 또는 일봉)
+            price_data = []
+            if request.use_minute_data and result.minute_prices:
+                for mp in result.minute_prices:
+                    price_data.append({
+                        "datetime": mp.datetime,
+                        "date": mp.date,
+                        "time": mp.time_formatted,
+                        "open_price": mp.open_price,
+                        "high_price": mp.high_price,
+                        "low_price": mp.low_price,
+                        "close_price": mp.close_price,
+                        "volume": mp.volume,
+                    })
+            else:
+                for dp in daily_prices:
+                    price_data.append({
+                        "datetime": dp.date,
+                        "date": dp.date,
+                        "time": "",
+                        "open_price": dp.open_price,
+                        "high_price": dp.high_price,
+                        "low_price": dp.low_price,
+                        "close_price": dp.close_price,
+                        "volume": dp.volume,
+                    })
 
             # 결과 변환
             trades_data = []
@@ -358,6 +409,8 @@ def create_app() -> FastAPI:
                     "win_rate": result.win_rate,
                     "strategy_params": result.strategy_params,
                     "trades": trades_data,
+                    "price_data": price_data,
+                    "use_minute_data": request.use_minute_data,
                 }
             }
 

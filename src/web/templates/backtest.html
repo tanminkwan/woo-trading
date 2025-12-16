@@ -49,6 +49,14 @@
                     <option value="false">실제 API 데이터</option>
                 </select>
             </div>
+            <div class="form-group">
+                <label for="use_minute_data">데이터 단위</label>
+                <select id="use_minute_data" name="use_minute_data">
+                    <option value="false">일봉 (Daily)</option>
+                    <option value="true">분봉 (Minute)</option>
+                </select>
+                <small>분봉: 더 정밀한 시뮬레이션 (처리 시간 증가)</small>
+            </div>
         </div>
 
         <!-- 범위 매매 파라미터 -->
@@ -110,6 +118,18 @@
     <div class="card">
         <h2>성과 지표</h2>
         <div class="grid" id="result-metrics"></div>
+    </div>
+
+    <div class="card">
+        <h2>주가 차트</h2>
+        <div class="chart-container">
+            <canvas id="priceChart"></canvas>
+        </div>
+        <div class="chart-legend">
+            <span class="legend-item"><span class="legend-line"></span> 종가</span>
+            <span class="legend-item"><span class="legend-dot buy"></span> 매수</span>
+            <span class="legend-item"><span class="legend-dot sell"></span> 매도</span>
+        </div>
     </div>
 
     <div class="card">
@@ -236,11 +256,47 @@
         padding: 2rem;
         color: #6c757d;
     }
+    .chart-container {
+        position: relative;
+        height: 400px;
+        width: 100%;
+    }
+    .chart-legend {
+        display: flex;
+        justify-content: center;
+        gap: 2rem;
+        margin-top: 1rem;
+        font-size: 0.9rem;
+    }
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .legend-line {
+        width: 20px;
+        height: 2px;
+        background-color: #3498db;
+    }
+    .legend-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+    }
+    .legend-dot.buy {
+        background-color: #e74c3c;
+    }
+    .legend-dot.sell {
+        background-color: #2ecc71;
+    }
 </style>
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+    let priceChart = null;
+
     // 날짜 초기값 설정 (최근 1개월)
     const today = new Date();
     const oneMonthAgo = new Date();
@@ -294,7 +350,8 @@
                 end_date: endDate,
                 capital: parseInt(formData.get('capital')),
                 strategy: strategy,
-                use_mock: formData.get('use_mock') === 'true'
+                use_mock: formData.get('use_mock') === 'true',
+                use_minute_data: formData.get('use_minute_data') === 'true'
             };
 
             // 전략별 파라미터 추가
@@ -436,11 +493,164 @@
             document.getElementById('trade-list').innerHTML = '<div class="no-trades">거래 내역이 없습니다.</div>';
         }
 
+        // 차트 그리기
+        drawPriceChart(data);
+
         // 결과 영역으로 스크롤
         document.getElementById('result-area').scrollIntoView({ behavior: 'smooth' });
     }
 
+    function drawPriceChart(data) {
+        const ctx = document.getElementById('priceChart').getContext('2d');
+
+        // 기존 차트 제거
+        if (priceChart) {
+            priceChart.destroy();
+        }
+
+        // 가격 데이터와 거래 포인트 준비 (분봉 또는 일봉)
+        const priceData = data.price_data || [];
+        const trades = data.trades || [];
+        const useMinuteData = data.use_minute_data || false;
+
+        if (priceData.length === 0) {
+            return;
+        }
+
+        // 분봉 데이터가 너무 많으면 샘플링 (차트 성능 최적화)
+        let displayData = priceData;
+        let sampleRate = 1;
+        if (priceData.length > 500) {
+            sampleRate = Math.ceil(priceData.length / 500);
+            displayData = priceData.filter((_, idx) => idx % sampleRate === 0);
+        }
+
+        // 라벨 (분봉이면 시간 포함)
+        const labels = displayData.map(d => {
+            if (useMinuteData && d.time) {
+                return `${formatDate(d.date)} ${d.time}`;
+            }
+            return formatDate(d.date);
+        });
+
+        // 종가 데이터
+        const closePrices = displayData.map(d => d.close_price);
+
+        // 매수/매도 포인트 데이터
+        const buyPoints = new Array(displayData.length).fill(null);
+        const sellPoints = new Array(displayData.length).fill(null);
+
+        trades.forEach(trade => {
+            // 분봉의 경우 datetime으로 매칭, 일봉은 date로 매칭
+            let idx;
+            if (useMinuteData) {
+                idx = displayData.findIndex(d => d.datetime === trade.date);
+                // 정확한 매칭이 안되면 가장 가까운 시점 찾기
+                if (idx === -1) {
+                    idx = displayData.findIndex(d => d.datetime >= trade.date);
+                }
+            } else {
+                idx = displayData.findIndex(d => d.date === trade.date);
+            }
+
+            if (idx !== -1) {
+                if (trade.trade_type === 'buy') {
+                    buyPoints[idx] = trade.price;
+                } else {
+                    sellPoints[idx] = trade.price;
+                }
+            }
+        });
+
+        priceChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: '종가',
+                        data: closePrices,
+                        borderColor: '#3498db',
+                        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.1,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                    },
+                    {
+                        label: '매수',
+                        data: buyPoints,
+                        borderColor: '#e74c3c',
+                        backgroundColor: '#e74c3c',
+                        borderWidth: 0,
+                        pointRadius: 8,
+                        pointStyle: 'triangle',
+                        showLine: false,
+                    },
+                    {
+                        label: '매도',
+                        data: sellPoints,
+                        borderColor: '#2ecc71',
+                        backgroundColor: '#2ecc71',
+                        borderWidth: 0,
+                        pointRadius: 8,
+                        pointStyle: 'rectRot',
+                        showLine: false,
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    intersect: false,
+                    mode: 'index',
+                },
+                plugins: {
+                    legend: {
+                        display: false,
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                if (context.raw === null) return null;
+                                return `${context.dataset.label}: ${context.raw.toLocaleString()}원`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            display: false,
+                        },
+                        ticks: {
+                            maxTicksLimit: 10,
+                        }
+                    },
+                    y: {
+                        grid: {
+                            color: '#e9ecef',
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return value.toLocaleString() + '원';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     function formatDate(dateStr) {
+        if (!dateStr) return '';
+        // YYYYMMDDHHMMSS (분봉)
+        if (dateStr.length === 14) {
+            return `${dateStr.substring(0, 4)}-${dateStr.substring(4, 6)}-${dateStr.substring(6, 8)} ${dateStr.substring(8, 10)}:${dateStr.substring(10, 12)}`;
+        }
+        // YYYYMMDD (일봉)
         if (dateStr.length === 8) {
             return `${dateStr.substring(0, 4)}-${dateStr.substring(4, 6)}-${dateStr.substring(6, 8)}`;
         }
