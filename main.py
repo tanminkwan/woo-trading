@@ -9,6 +9,9 @@ from typing import Optional
 
 from src.factory import KISClient
 from src.infrastructure.config import Config
+from src.backtest.engine import BacktestEngine
+from src.backtest.data_provider import HistoricalDataProvider, MockHistoricalDataProvider, generate_sample_data
+from src.backtest.models import BacktestResult
 
 
 def print_price(client: KISClient, stock_code: str):
@@ -130,6 +133,88 @@ def print_orders(client: KISClient, date: Optional[str] = None):
         print("주문 내역 조회 실패")
 
 
+def run_backtest(
+    client: Optional[KISClient],
+    stock_code: str,
+    start_date: str,
+    end_date: str,
+    capital: int,
+    strategy: str,
+    buy_price: int = 0,
+    sell_price: int = 0,
+    k: float = 0.5,
+    target_profit: float = 2.0,
+    stop_loss: float = -2.0,
+    use_mock: bool = False,
+):
+    """백테스트 실행"""
+    print(f"\n=== 백테스트 시작 ===")
+    print(f"  종목코드: {stock_code}")
+    print(f"  기간: {start_date} ~ {end_date}")
+    print(f"  초기자본: {capital:,}원")
+    print(f"  전략: {strategy}")
+
+    # 전략 파라미터 설정
+    if strategy == "range_trading":
+        strategy_params = {
+            "buy_price": buy_price,
+            "sell_price": sell_price,
+        }
+        print(f"  매수가: {buy_price:,}원")
+        print(f"  매도가: {sell_price:,}원")
+    else:  # volatility_breakout
+        strategy_params = {
+            "k": k,
+            "target_profit_rate": target_profit,
+            "stop_loss_rate": stop_loss,
+            "sell_at_close": True,
+        }
+        print(f"  K값: {k}")
+        print(f"  목표수익률: {target_profit}%")
+        print(f"  손절률: {stop_loss}%")
+
+    # 데이터 제공자 설정
+    if use_mock:
+        print("\n[Mock 데이터 사용]")
+        sample_data = generate_sample_data(start_date, end_date, base_price=buy_price or 50000)
+        data_provider = MockHistoricalDataProvider(sample_data)
+    else:
+        if client is None:
+            print("실제 데이터를 사용하려면 API 인증이 필요합니다.")
+            print("--mock 옵션을 사용하거나 API 키를 설정하세요.")
+            return
+        data_provider = HistoricalDataProvider(client.stock)
+
+    # 백테스트 엔진 실행
+    engine = BacktestEngine(data_provider)
+    result = engine.run(
+        stock_code=stock_code,
+        start_date=start_date,
+        end_date=end_date,
+        initial_capital=capital,
+        strategy=strategy,
+        strategy_params=strategy_params,
+        stock_name=stock_code,
+    )
+
+    # 결과 출력
+    print(result.get_summary())
+
+    # 거래 내역 출력
+    if result.trades:
+        print("\n[거래 내역]")
+        for i, trade in enumerate(result.trades, 1):
+            trade_dict = trade.to_dict()
+            print(f"  {i}. {trade_dict['일자']} | {trade_dict['구분']} | "
+                  f"{trade_dict['가격']:,}원 x {trade_dict['수량']}주 | "
+                  f"손익: {trade_dict['손익']:,}원 ({trade_dict['수익률']}) | "
+                  f"{trade_dict['사유']}")
+    else:
+        print("\n[거래 없음]")
+
+    return result
+
+
 def create_parser() -> argparse.ArgumentParser:
     """CLI 파서 생성"""
     parser = argparse.ArgumentParser(
@@ -174,6 +259,25 @@ def create_parser() -> argparse.ArgumentParser:
     orders_parser = subparsers.add_parser("orders", help="주문 내역 조회")
     orders_parser.add_argument("-d", "--date", help="조회일자 (YYYYMMDD)")
 
+    # 백테스트
+    backtest_parser = subparsers.add_parser("backtest", help="백테스트 시뮬레이션")
+    backtest_parser.add_argument("stock_code", help="종목코드")
+    backtest_parser.add_argument("start_date", help="시작일 (YYYYMMDD)")
+    backtest_parser.add_argument("end_date", help="종료일 (YYYYMMDD)")
+    backtest_parser.add_argument("-c", "--capital", type=int, default=1000000, help="초기 자본금 (기본: 1,000,000)")
+    backtest_parser.add_argument(
+        "-s", "--strategy",
+        choices=["range_trading", "volatility_breakout"],
+        default="range_trading",
+        help="거래 전략 (기본: range_trading)"
+    )
+    backtest_parser.add_argument("--buy-price", type=int, default=0, help="[Range] 매수가")
+    backtest_parser.add_argument("--sell-price", type=int, default=0, help="[Range] 매도가")
+    backtest_parser.add_argument("--k", type=float, default=0.5, help="[VB] K값 (기본: 0.5)")
+    backtest_parser.add_argument("--target-profit", type=float, default=2.0, help="[VB] 목표 수익률 %% (기본: 2.0)")
+    backtest_parser.add_argument("--stop-loss", type=float, default=-2.0, help="[VB] 손절 수익률 %% (기본: -2.0)")
+    backtest_parser.add_argument("--mock", action="store_true", help="Mock 데이터 사용 (API 미사용)")
+
     return parser
 
 
@@ -187,6 +291,24 @@ def main():
         return
 
     try:
+        # 백테스트는 --mock 옵션으로 API 없이 실행 가능
+        if args.command == "backtest" and args.mock:
+            run_backtest(
+                client=None,
+                stock_code=args.stock_code,
+                start_date=args.start_date,
+                end_date=args.end_date,
+                capital=args.capital,
+                strategy=args.strategy,
+                buy_price=args.buy_price,
+                sell_price=args.sell_price,
+                k=args.k,
+                target_profit=args.target_profit,
+                stop_loss=args.stop_loss,
+                use_mock=True,
+            )
+            return
+
         # 클라이언트 초기화
         client = KISClient()
         if not client.authenticate():
@@ -211,6 +333,21 @@ def main():
             execute_sell(client, args.stock_code, args.quantity, args.price)
         elif args.command == "orders":
             print_orders(client, args.date)
+        elif args.command == "backtest":
+            run_backtest(
+                client=client,
+                stock_code=args.stock_code,
+                start_date=args.start_date,
+                end_date=args.end_date,
+                capital=args.capital,
+                strategy=args.strategy,
+                buy_price=args.buy_price,
+                sell_price=args.sell_price,
+                k=args.k,
+                target_profit=args.target_profit,
+                stop_loss=args.stop_loss,
+                use_mock=False,
+            )
 
     except ValueError as e:
         print(f"설정 오류: {e}")

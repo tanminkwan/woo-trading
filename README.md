@@ -10,6 +10,7 @@
 - **주문 내역**: 당일 주문/체결 조회
 - **자동매매 엔진**: YAML 설정 기반 자동 매매
 - **웹 관리 화면**: 종목 등록/관리, 엔진 제어, 거래 로그
+- **백테스트**: 과거 데이터 기반 전략 시뮬레이션
 
 ## 설치
 
@@ -79,6 +80,12 @@ python main.py orders
 
 # 특정일 주문 내역 조회
 python main.py orders -d 20251216
+
+# 백테스트 (Mock 데이터)
+python main.py backtest 005930 20241101 20241130 --mock -s volatility_breakout
+
+# 백테스트 (실제 API 데이터)
+python main.py backtest 005930 20241101 20241130 -c 1000000 -s range_trading --buy-price 50000 --sell-price 55000
 ```
 
 ### Python 코드에서 사용
@@ -135,7 +142,11 @@ client = KISClient(config)
 auto-stock/
 ├── .env                          # 환경변수
 ├── main.py                       # CLI 인터페이스
+├── run_web.py                    # 웹 서버 실행
 ├── requirements.txt
+│
+├── config/
+│   └── trading_config.yaml       # 자동매매 설정
 │
 ├── src/
 │   ├── factory.py                # 의존성 주입 팩토리
@@ -149,18 +160,35 @@ auto-stock/
 │   │   ├── http_client.py        # HTTP 클라이언트
 │   │   └── auth.py               # 인증 처리
 │   │
-│   └── application/              # 애플리케이션 계층
-│       ├── stock_service.py      # 시세 서비스
-│       ├── account_service.py    # 계좌 서비스
-│       └── order_service.py      # 주문 서비스
+│   ├── application/              # 애플리케이션 계층
+│   │   ├── stock_service.py      # 시세 서비스
+│   │   ├── account_service.py    # 계좌 서비스
+│   │   └── order_service.py      # 주문 서비스
+│   │
+│   ├── engine/                   # 자동매매 엔진
+│   │   ├── config_parser.py      # 설정 파서
+│   │   └── trading_engine.py     # 트레이딩 엔진
+│   │
+│   ├── backtest/                 # 백테스트 모듈
+│   │   ├── models.py             # 결과 모델
+│   │   ├── strategies.py         # 전략 시뮬레이터
+│   │   ├── data_provider.py      # 데이터 제공자
+│   │   └── engine.py             # 백테스트 엔진
+│   │
+│   └── web/                      # 웹 UI
+│       ├── app.py                # FastAPI 앱
+│       └── templates/            # HTML 템플릿
 │
-└── tests/                        # 테스트
-    ├── conftest.py               # 테스트 픽스처
+└── tests/                        # 테스트 (121개)
+    ├── conftest.py
     ├── test_models.py
     ├── test_config.py
+    ├── test_config_parser.py
     ├── test_stock_service.py
     ├── test_account_service.py
-    └── test_order_service.py
+    ├── test_order_service.py
+    ├── test_trading_engine.py
+    └── test_backtest.py
 ```
 
 ## 아키텍처
@@ -225,9 +253,10 @@ python -m pytest tests/ -v --cov=src --cov-report=term-missing
 | domain/models.py | 90% |
 | application/ | 85-92% |
 | engine/config_parser.py | 91% |
-| **전체** | **62%** |
+| backtest/ | 81-98% |
+| **전체** | **68%** |
 
-총 87개 테스트 케이스
+총 121개 테스트 케이스
 
 ## 주의사항
 
@@ -603,6 +632,139 @@ flowchart LR
 | `/api/stocks/{code}/toggle` | POST | 활성화 토글 |
 | `/api/stocks/{code}/delete` | POST | 종목 삭제 |
 | `/api/logs` | GET | 거래 로그 |
+
+## 백테스트 (Backtest)
+
+과거 데이터를 기반으로 거래 전략의 성과를 시뮬레이션합니다.
+
+### CLI 사용법
+
+```bash
+# 기본 형식
+python main.py backtest <종목코드> <시작일> <종료일> [옵션]
+
+# 범위 매매 전략 백테스트
+python main.py backtest 005930 20241101 20241130 \
+    -c 1000000 \
+    -s range_trading \
+    --buy-price 50000 \
+    --sell-price 55000
+
+# 변동성 돌파 전략 백테스트
+python main.py backtest 005930 20241101 20241130 \
+    -c 1000000 \
+    -s volatility_breakout \
+    --k 0.5 \
+    --target-profit 2.0 \
+    --stop-loss -2.0
+
+# Mock 데이터로 테스트 (API 키 불필요)
+python main.py backtest 005930 20241101 20241130 --mock -s volatility_breakout
+```
+
+### 백테스트 옵션
+
+| 옵션 | 기본값 | 설명 |
+|------|--------|------|
+| `-c, --capital` | 1,000,000 | 초기 자본금 |
+| `-s, --strategy` | range_trading | 전략 (range_trading, volatility_breakout) |
+| `--buy-price` | 0 | [Range] 매수 희망가 |
+| `--sell-price` | 0 | [Range] 매도 희망가 |
+| `--k` | 0.5 | [VB] K값 |
+| `--target-profit` | 2.0 | [VB] 목표 수익률 (%) |
+| `--stop-loss` | -2.0 | [VB] 손절 수익률 (%) |
+| `--mock` | - | Mock 데이터 사용 (API 불필요) |
+
+### 결과 예시
+
+```
+========================================
+백테스트 결과 요약
+========================================
+종목: 삼성전자 (005930)
+기간: 20241101 ~ 20241130
+전략: volatility_breakout
+----------------------------------------
+초기 자본: 1,000,000원
+최종 자본: 1,052,300원
+총 손익: 52,300원 (+5.23%)
+----------------------------------------
+총 거래: 8회
+수익 거래: 5회
+손실 거래: 3회
+승률: 62.5%
+최대 낙폭: 3.21%
+========================================
+
+[거래 내역]
+  1. 20241104 | 매수 | 52,000원 x 19주 | 손익: 0원 (0.00%) | 목표가(52,000원) 돌파 (K=0.5)
+  2. 20241104 | 매도 | 53,040원 x 19주 | 손익: 19,760원 (2.00%) | 익절
+  ...
+```
+
+### Python 코드에서 사용
+
+```python
+from src.backtest.engine import BacktestEngine
+from src.backtest.data_provider import MockHistoricalDataProvider, generate_sample_data
+
+# 1. 샘플 데이터 생성 (또는 실제 데이터 제공자 사용)
+sample_data = generate_sample_data("20241101", "20241130", base_price=50000)
+provider = MockHistoricalDataProvider(sample_data)
+
+# 2. 백테스트 엔진 생성
+engine = BacktestEngine(provider)
+
+# 3. 백테스트 실행
+result = engine.run(
+    stock_code="005930",
+    start_date="20241101",
+    end_date="20241130",
+    initial_capital=1000000,
+    strategy="volatility_breakout",
+    strategy_params={
+        "k": 0.5,
+        "target_profit_rate": 2.0,
+        "stop_loss_rate": -2.0,
+        "sell_at_close": True,
+    },
+    stock_name="삼성전자",
+)
+
+# 4. 결과 확인
+print(result.get_summary())
+print(f"수익률: {result.total_return_rate:.2f}%")
+print(f"승률: {result.win_rate:.1f}%")
+```
+
+### 백테스트 흐름
+
+```mermaid
+flowchart TD
+    Start([백테스트 시작]) --> LoadData[과거 데이터 로드]
+    LoadData --> InitState[상태 초기화<br/>cash, position]
+
+    InitState --> ForEach{각 거래일 처리}
+    ForEach --> UpdateCapital[현재 자본 평가]
+    UpdateCapital --> CalcDrawdown[최대 낙폭 계산]
+
+    CalcDrawdown --> CheckPosition{보유 중?}
+    CheckPosition -->|No| CheckBuy{매수 조건?}
+    CheckBuy -->|Yes| ExecuteBuy[매수 실행]
+    CheckBuy -->|No| NextDay
+
+    CheckPosition -->|Yes| CheckSell{매도 조건?}
+    CheckSell -->|Yes| ExecuteSell[매도 실행]
+    CheckSell -->|No| NextDay
+
+    ExecuteBuy --> RecordTrade[거래 기록]
+    ExecuteSell --> RecordTrade
+    RecordTrade --> NextDay{다음 거래일?}
+
+    NextDay -->|Yes| ForEach
+    NextDay -->|No| CalcResult[결과 계산<br/>수익률, 승률]
+    CalcResult --> End([결과 반환])
+```
 
 ## 트러블슈팅
 
