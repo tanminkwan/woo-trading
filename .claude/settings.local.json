@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install:*)",
+      "Bash(python main.py:*)",
+      "Bash(timeout /t 60 /nobreak)",
+      "Bash(ping:*)",
+      "WebSearch",
+      "WebFetch(domain:finance.naver.com)",
+      "Bash(python -m pytest tests/ -v)",
+      "Bash(git init:*)",
+      "Bash(del account.py auth.py config.py order.py stock.py nul)",
+      "Bash(dir:*)",
+      "Bash(ls:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

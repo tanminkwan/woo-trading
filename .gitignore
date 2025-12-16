@@ -1,0 +1,61 @@
+# 환경변수 및 민감정보
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 가상환경
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# 테스트
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# 기타
+*.log
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
+
+# 기존 레거시 파일
+한투.txt
