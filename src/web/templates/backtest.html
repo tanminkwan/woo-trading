@@ -1,0 +1,450 @@
+{% extends "base.html" %}
+
+{% block title %}백테스트 - Auto Trading{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>백테스트 시뮬레이션</h2>
+    <p style="color: #666; margin-bottom: 1rem;">과거 데이터를 기반으로 거래 전략의 성과를 시뮬레이션합니다.</p>
+
+    <form id="backtestForm">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="stock_code">종목코드 *</label>
+                <input type="text" id="stock_code" name="stock_code" placeholder="005930" required>
+            </div>
+            <div class="form-group">
+                <label for="stock_name">종목명 (선택)</label>
+                <input type="text" id="stock_name" name="stock_name" placeholder="삼성전자">
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="start_date">시작일 *</label>
+                <input type="date" id="start_date" name="start_date" required>
+            </div>
+            <div class="form-group">
+                <label for="end_date">종료일 *</label>
+                <input type="date" id="end_date" name="end_date" required>
+            </div>
+            <div class="form-group">
+                <label for="capital">초기 자본금 *</label>
+                <input type="number" id="capital" name="capital" value="1000000" min="100000" step="100000" required>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="strategy">거래 전략 *</label>
+                <select id="strategy" name="strategy" onchange="toggleStrategyParams()">
+                    <option value="range_trading">범위 매매 (Range Trading)</option>
+                    <option value="volatility_breakout">변동성 돌파 (Volatility Breakout)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="use_mock">데이터 소스</label>
+                <select id="use_mock" name="use_mock">
+                    <option value="true">Mock 데이터 (테스트용)</option>
+                    <option value="false">실제 API 데이터</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- 범위 매매 파라미터 -->
+        <div id="range-params" class="strategy-params show">
+            <h4>범위 매매 설정</h4>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="buy_price">매수가 (이하 시 매수) *</label>
+                    <input type="number" id="buy_price" name="buy_price" placeholder="50000" min="0">
+                </div>
+                <div class="form-group">
+                    <label for="sell_price">매도가 (이상 시 매도) *</label>
+                    <input type="number" id="sell_price" name="sell_price" placeholder="55000" min="0">
+                </div>
+            </div>
+        </div>
+
+        <!-- 변동성 돌파 파라미터 -->
+        <div id="vb-params" class="strategy-params">
+            <h4>변동성 돌파 설정</h4>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="vb_k">K값 (변동성 계수)</label>
+                    <input type="number" id="vb_k" name="vb_k" step="0.1" min="0.1" max="1.0" value="0.5">
+                    <small>0.3~0.4: 공격적, 0.5: 표준, 0.6~0.7: 보수적</small>
+                </div>
+                <div class="form-group">
+                    <label for="vb_target">목표 수익률 (%)</label>
+                    <input type="number" id="vb_target" name="vb_target" step="0.1" value="2.0">
+                </div>
+                <div class="form-group">
+                    <label for="vb_stop">손절 수익률 (%)</label>
+                    <input type="number" id="vb_stop" name="vb_stop" step="0.1" value="-2.0">
+                </div>
+                <div class="form-group">
+                    <label for="vb_close">장마감 전 매도</label>
+                    <select id="vb_close" name="vb_close">
+                        <option value="true">예</option>
+                        <option value="false">아니오</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="runBtn">
+            <span id="btnText">백테스트 실행</span>
+            <span id="btnSpinner" class="spinner" style="display: none;"></span>
+        </button>
+    </form>
+</div>
+
+<!-- 결과 영역 -->
+<div id="result-area" style="display: none;">
+    <div class="card">
+        <h2>백테스트 결과</h2>
+        <div id="result-summary" class="result-summary"></div>
+    </div>
+
+    <div class="card">
+        <h2>성과 지표</h2>
+        <div class="grid" id="result-metrics"></div>
+    </div>
+
+    <div class="card">
+        <h2>거래 내역</h2>
+        <div id="trade-list"></div>
+    </div>
+</div>
+
+<style>
+    .strategy-params {
+        display: none;
+        margin-top: 1rem;
+        padding: 1rem;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        border: 1px solid #e9ecef;
+    }
+    .strategy-params.show {
+        display: block;
+    }
+    .strategy-params h4 {
+        margin-bottom: 1rem;
+        color: #495057;
+        font-size: 1rem;
+    }
+    #range-params h4 {
+        color: #1565c0;
+    }
+    #vb-params h4 {
+        color: #c2185b;
+    }
+    .form-group small {
+        display: block;
+        color: #6c757d;
+        font-size: 0.8rem;
+        margin-top: 0.25rem;
+    }
+    .spinner {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 2px solid #ffffff;
+        border-radius: 50%;
+        border-top-color: transparent;
+        animation: spin 1s linear infinite;
+        margin-left: 8px;
+    }
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+    .result-summary {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+    .result-summary .info-group {
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #e9ecef;
+    }
+    .result-summary .info-label {
+        color: #6c757d;
+        font-size: 0.9rem;
+    }
+    .result-summary .info-value {
+        font-weight: 600;
+        font-size: 1.1rem;
+    }
+    .profit-positive {
+        color: #e74c3c;
+    }
+    .profit-negative {
+        color: #3498db;
+    }
+    .metric-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 8px;
+        text-align: center;
+    }
+    .metric-card.success {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    }
+    .metric-card.warning {
+        background: linear-gradient(135deg, #f39c12 0%, #e74c3c 100%);
+    }
+    .metric-card.info {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .metric-card h4 {
+        font-size: 0.9rem;
+        opacity: 0.9;
+        margin-bottom: 0.5rem;
+    }
+    .metric-card .value {
+        font-size: 1.8rem;
+        font-weight: 700;
+    }
+    .trade-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+    }
+    .trade-table th, .trade-table td {
+        padding: 0.75rem;
+        text-align: left;
+        border-bottom: 1px solid #e9ecef;
+    }
+    .trade-table th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+    }
+    .trade-table tr:hover {
+        background-color: #f8f9fa;
+    }
+    .trade-buy {
+        color: #e74c3c;
+    }
+    .trade-sell {
+        color: #3498db;
+    }
+    .no-trades {
+        text-align: center;
+        padding: 2rem;
+        color: #6c757d;
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // 날짜 초기값 설정 (최근 1개월)
+    const today = new Date();
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+
+    document.getElementById('end_date').value = today.toISOString().split('T')[0];
+    document.getElementById('start_date').value = oneMonthAgo.toISOString().split('T')[0];
+
+    function toggleStrategyParams() {
+        const strategy = document.getElementById('strategy').value;
+        const rangeParams = document.getElementById('range-params');
+        const vbParams = document.getElementById('vb-params');
+
+        if (strategy === 'volatility_breakout') {
+            rangeParams.classList.remove('show');
+            vbParams.classList.add('show');
+        } else {
+            rangeParams.classList.add('show');
+            vbParams.classList.remove('show');
+        }
+    }
+
+    document.getElementById('backtestForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const btn = document.getElementById('runBtn');
+        const btnText = document.getElementById('btnText');
+        const btnSpinner = document.getElementById('btnSpinner');
+
+        // 버튼 비활성화
+        btn.disabled = true;
+        btnText.textContent = '실행 중...';
+        btnSpinner.style.display = 'inline-block';
+
+        // 결과 영역 숨김
+        document.getElementById('result-area').style.display = 'none';
+
+        try {
+            const formData = new FormData(this);
+            const strategy = formData.get('strategy');
+
+            // 날짜 형식 변환 (YYYY-MM-DD -> YYYYMMDD)
+            const startDate = formData.get('start_date').replace(/-/g, '');
+            const endDate = formData.get('end_date').replace(/-/g, '');
+
+            // 요청 데이터 구성
+            const requestData = {
+                stock_code: formData.get('stock_code'),
+                stock_name: formData.get('stock_name') || formData.get('stock_code'),
+                start_date: startDate,
+                end_date: endDate,
+                capital: parseInt(formData.get('capital')),
+                strategy: strategy,
+                use_mock: formData.get('use_mock') === 'true'
+            };
+
+            // 전략별 파라미터 추가
+            if (strategy === 'range_trading') {
+                requestData.buy_price = parseInt(formData.get('buy_price')) || 0;
+                requestData.sell_price = parseInt(formData.get('sell_price')) || 0;
+            } else {
+                requestData.k = parseFloat(formData.get('vb_k')) || 0.5;
+                requestData.target_profit_rate = parseFloat(formData.get('vb_target')) || 2.0;
+                requestData.stop_loss_rate = parseFloat(formData.get('vb_stop')) || -2.0;
+                requestData.sell_at_close = formData.get('vb_close') === 'true';
+            }
+
+            const response = await fetch('/api/backtest/run', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestData)
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                displayResult(result.data);
+            } else {
+                alert('백테스트 실행 실패: ' + (result.message || '알 수 없는 오류'));
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('백테스트 실행 중 오류가 발생했습니다.');
+        } finally {
+            // 버튼 복원
+            btn.disabled = false;
+            btnText.textContent = '백테스트 실행';
+            btnSpinner.style.display = 'none';
+        }
+    });
+
+    function displayResult(data) {
+        // 결과 영역 표시
+        document.getElementById('result-area').style.display = 'block';
+
+        // 수익률 색상
+        const profitClass = data.total_return_rate >= 0 ? 'profit-positive' : 'profit-negative';
+        const profitSign = data.total_return_rate >= 0 ? '+' : '';
+
+        // 요약 정보
+        document.getElementById('result-summary').innerHTML = `
+            <div class="info-group">
+                <div class="info-label">종목</div>
+                <div class="info-value">${data.stock_name} (${data.stock_code})</div>
+            </div>
+            <div class="info-group">
+                <div class="info-label">기간</div>
+                <div class="info-value">${formatDate(data.start_date)} ~ ${formatDate(data.end_date)}</div>
+            </div>
+            <div class="info-group">
+                <div class="info-label">전략</div>
+                <div class="info-value">${data.strategy === 'range_trading' ? '범위 매매' : '변동성 돌파'}</div>
+            </div>
+            <div class="info-group">
+                <div class="info-label">초기 자본</div>
+                <div class="info-value">${data.initial_capital.toLocaleString()}원</div>
+            </div>
+            <div class="info-group">
+                <div class="info-label">최종 자본</div>
+                <div class="info-value">${data.final_capital.toLocaleString()}원</div>
+            </div>
+            <div class="info-group">
+                <div class="info-label">총 손익</div>
+                <div class="info-value ${profitClass}">${profitSign}${data.total_profit_loss.toLocaleString()}원 (${profitSign}${data.total_return_rate.toFixed(2)}%)</div>
+            </div>
+        `;
+
+        // 성과 지표
+        document.getElementById('result-metrics').innerHTML = `
+            <div class="metric-card ${data.total_return_rate >= 0 ? 'success' : 'warning'}">
+                <h4>총 수익률</h4>
+                <div class="value">${profitSign}${data.total_return_rate.toFixed(2)}%</div>
+            </div>
+            <div class="metric-card info">
+                <h4>총 거래</h4>
+                <div class="value">${data.total_trades}회</div>
+            </div>
+            <div class="metric-card ${data.win_rate >= 50 ? 'success' : 'warning'}">
+                <h4>승률</h4>
+                <div class="value">${data.win_rate.toFixed(1)}%</div>
+            </div>
+            <div class="metric-card warning">
+                <h4>최대 낙폭</h4>
+                <div class="value">${data.max_drawdown.toFixed(2)}%</div>
+            </div>
+        `;
+
+        // 거래 내역
+        if (data.trades && data.trades.length > 0) {
+            let tableHtml = `
+                <table class="trade-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>일자</th>
+                            <th>구분</th>
+                            <th>가격</th>
+                            <th>수량</th>
+                            <th>금액</th>
+                            <th>손익</th>
+                            <th>사유</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            data.trades.forEach((trade, index) => {
+                const tradeClass = trade.trade_type === 'buy' ? 'trade-buy' : 'trade-sell';
+                const tradeName = trade.trade_type === 'buy' ? '매수' : '매도';
+                const profitDisplay = trade.profit_loss !== 0
+                    ? `<span class="${trade.profit_loss >= 0 ? 'profit-positive' : 'profit-negative'}">${trade.profit_loss >= 0 ? '+' : ''}${trade.profit_loss.toLocaleString()}원 (${trade.profit_rate.toFixed(2)}%)</span>`
+                    : '-';
+
+                tableHtml += `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td>${formatDate(trade.date)}</td>
+                        <td class="${tradeClass}">${tradeName}</td>
+                        <td>${trade.price.toLocaleString()}원</td>
+                        <td>${trade.quantity}주</td>
+                        <td>${trade.amount.toLocaleString()}원</td>
+                        <td>${profitDisplay}</td>
+                        <td>${trade.reason}</td>
+                    </tr>
+                `;
+            });
+
+            tableHtml += '</tbody></table>';
+            document.getElementById('trade-list').innerHTML = tableHtml;
+        } else {
+            document.getElementById('trade-list').innerHTML = '<div class="no-trades">거래 내역이 없습니다.</div>';
+        }
+
+        // 결과 영역으로 스크롤
+        document.getElementById('result-area').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function formatDate(dateStr) {
+        if (dateStr.length === 8) {
+            return `${dateStr.substring(0, 4)}-${dateStr.substring(4, 6)}-${dateStr.substring(6, 8)}`;
+        }
+        return dateStr;
+    }
+</script>
+{% endblock %}

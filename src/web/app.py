@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 from pathlib import Path
 from typing import Optional
 import logging
@@ -12,6 +13,8 @@ import logging
 from ..factory import KISClient
 from ..engine.config_parser import TradingConfig, StockConfig, VolatilityBreakoutParams
 from ..engine.trading_engine import TradingEngine, EngineStatus
+from ..backtest.engine import BacktestEngine
+from ..backtest.data_provider import HistoricalDataProvider, MockHistoricalDataProvider, generate_sample_data
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +82,13 @@ def create_app() -> FastAPI:
         return templates.TemplateResponse("logs.html", {
             "request": request,
             "logs": engine.trade_logs[-50:],  # 최근 50개
+        })
+
+    @app.get("/backtest", response_class=HTMLResponse)
+    async def backtest_page(request: Request):
+        """백테스트 페이지"""
+        return templates.TemplateResponse("backtest.html", {
+            "request": request,
         })
 
     # ============ API 라우트 ============
@@ -247,5 +257,112 @@ def create_app() -> FastAPI:
         engine = get_engine()
         engine.reload_config()
         return {"success": True, "message": "Configuration reloaded"}
+
+    # ============ 백테스트 API ============
+
+    class BacktestRequest(BaseModel):
+        """백테스트 요청 모델"""
+        stock_code: str
+        stock_name: Optional[str] = ""
+        start_date: str
+        end_date: str
+        capital: int = 1000000
+        strategy: str = "range_trading"
+        use_mock: bool = True
+        # Range Trading params
+        buy_price: Optional[int] = 0
+        sell_price: Optional[int] = 0
+        # Volatility Breakout params
+        k: Optional[float] = 0.5
+        target_profit_rate: Optional[float] = 2.0
+        stop_loss_rate: Optional[float] = -2.0
+        sell_at_close: Optional[bool] = True
+
+    @app.post("/api/backtest/run")
+    async def api_run_backtest(request: BacktestRequest):
+        """백테스트 실행 API"""
+        try:
+            # 전략 파라미터 설정
+            if request.strategy == "range_trading":
+                strategy_params = {
+                    "buy_price": request.buy_price or 0,
+                    "sell_price": request.sell_price or 0,
+                }
+            else:  # volatility_breakout
+                strategy_params = {
+                    "k": request.k or 0.5,
+                    "target_profit_rate": request.target_profit_rate or 2.0,
+                    "stop_loss_rate": request.stop_loss_rate or -2.0,
+                    "sell_at_close": request.sell_at_close if request.sell_at_close is not None else True,
+                }
+
+            # 데이터 제공자 설정
+            if request.use_mock:
+                base_price = request.buy_price if request.buy_price and request.buy_price > 0 else 50000
+                sample_data = generate_sample_data(
+                    request.start_date,
+                    request.end_date,
+                    base_price=base_price
+                )
+                data_provider = MockHistoricalDataProvider(sample_data)
+            else:
+                global _client
+                if not _client or not _client.is_authenticated:
+                    _client = KISClient()
+                    if not _client.authenticate():
+                        return {"success": False, "message": "API 인증 실패. Mock 데이터를 사용하세요."}
+                data_provider = HistoricalDataProvider(_client.stock)
+
+            # 백테스트 실행
+            engine = BacktestEngine(data_provider)
+            result = engine.run(
+                stock_code=request.stock_code,
+                start_date=request.start_date,
+                end_date=request.end_date,
+                initial_capital=request.capital,
+                strategy=request.strategy,
+                strategy_params=strategy_params,
+                stock_name=request.stock_name or request.stock_code,
+            )
+
+            # 결과 변환
+            trades_data = []
+            for trade in result.trades:
+                trades_data.append({
+                    "date": trade.date,
+                    "trade_type": trade.trade_type.value,
+                    "price": trade.price,
+                    "quantity": trade.quantity,
+                    "amount": trade.amount,
+                    "profit_loss": trade.profit_loss,
+                    "profit_rate": trade.profit_rate,
+                    "reason": trade.reason,
+                })
+
+            return {
+                "success": True,
+                "data": {
+                    "stock_code": result.stock_code,
+                    "stock_name": result.stock_name,
+                    "start_date": result.start_date,
+                    "end_date": result.end_date,
+                    "strategy": result.strategy,
+                    "initial_capital": result.initial_capital,
+                    "final_capital": result.final_capital,
+                    "total_trades": result.total_trades,
+                    "winning_trades": result.winning_trades,
+                    "losing_trades": result.losing_trades,
+                    "total_profit_loss": result.total_profit_loss,
+                    "total_return_rate": result.total_return_rate,
+                    "max_drawdown": result.max_drawdown,
+                    "win_rate": result.win_rate,
+                    "strategy_params": result.strategy_params,
+                    "trades": trades_data,
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"Backtest error: {e}")
+            return {"success": False, "message": str(e)}
 
     return app
