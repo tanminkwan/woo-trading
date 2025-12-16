@@ -17,6 +17,7 @@ class StockConfig:
     sell_price: int
     interval: Optional[int] = None
     enabled: bool = True
+    priority: int = 100  # 우선순위 (낮을수록 높은 우선순위, 기본값 100)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -27,6 +28,7 @@ class StockConfig:
             "sell_price": self.sell_price,
             "interval": self.interval,
             "enabled": self.enabled,
+            "priority": self.priority,
         }
 
     @classmethod
@@ -39,6 +41,7 @@ class StockConfig:
             sell_price=int(data.get("sell_price", 0)),
             interval=data.get("interval"),
             enabled=bool(data.get("enabled", True)),
+            priority=int(data.get("priority", 100)),
         )
 
 
@@ -50,8 +53,8 @@ class TradingConfig:
     stocks: List[StockConfig] = field(default_factory=list)
 
     def get_enabled_stocks(self) -> List[StockConfig]:
-        """활성화된 종목만 반환"""
-        return [s for s in self.stocks if s.enabled]
+        """활성화된 종목만 반환 (우선순위 순으로 정렬)"""
+        return sorted([s for s in self.stocks if s.enabled], key=lambda x: x.priority)
 
     def get_stock_by_code(self, code: str) -> Optional[StockConfig]:
         """종목코드로 설정 조회"""
@@ -143,6 +146,25 @@ class TradingConfig:
                 sell_price=stock.sell_price,
                 interval=stock.interval,
                 enabled=enabled,
+                priority=stock.priority,
+            )
+            return True
+        return False
+
+    def update_stock_priority(self, code: str, priority: int) -> bool:
+        """종목 우선순위 변경"""
+        stock = self.get_stock_by_code(code)
+        if stock:
+            idx = self.stocks.index(stock)
+            self.stocks[idx] = StockConfig(
+                code=stock.code,
+                name=stock.name,
+                max_amount=stock.max_amount,
+                buy_price=stock.buy_price,
+                sell_price=stock.sell_price,
+                interval=stock.interval,
+                enabled=stock.enabled,
+                priority=priority,
             )
             return True
         return False

@@ -181,3 +181,68 @@ class TestTradingConfig:
 
         stock = config.get_stock_by_code("005930")
         assert stock.enabled is False
+
+    def test_priority_default_value(self):
+        """우선순위 기본값 테스트"""
+        config = StockConfig("005930", "삼성전자", 1000000, 50000, 60000)
+        assert config.priority == 100
+
+    def test_priority_custom_value(self):
+        """우선순위 커스텀 값 테스트"""
+        config = StockConfig("005930", "삼성전자", 1000000, 50000, 60000, priority=1)
+        assert config.priority == 1
+
+    def test_priority_from_dict(self):
+        """딕셔너리에서 우선순위 로드 테스트"""
+        data = {
+            "code": "005930",
+            "name": "삼성전자",
+            "max_amount": 1000000,
+            "buy_price": 50000,
+            "sell_price": 60000,
+            "priority": 5,
+        }
+        config = StockConfig.from_dict(data)
+        assert config.priority == 5
+
+    def test_priority_to_dict(self):
+        """딕셔너리로 우선순위 내보내기 테스트"""
+        config = StockConfig("005930", "삼성전자", 1000000, 50000, 60000, priority=3)
+        result = config.to_dict()
+        assert result["priority"] == 3
+
+    def test_get_enabled_stocks_sorted_by_priority(self):
+        """활성화된 종목이 우선순위 순으로 정렬되는지 테스트"""
+        config = TradingConfig(
+            stocks=[
+                StockConfig("005930", "삼성전자", 1000000, 50000, 60000, enabled=True, priority=3),
+                StockConfig("000660", "SK하이닉스", 500000, 170000, 200000, enabled=True, priority=1),
+                StockConfig("035420", "NAVER", 800000, 180000, 220000, enabled=True, priority=2),
+            ]
+        )
+
+        enabled = config.get_enabled_stocks()
+        assert len(enabled) == 3
+        assert enabled[0].code == "000660"  # priority 1
+        assert enabled[1].code == "035420"  # priority 2
+        assert enabled[2].code == "005930"  # priority 3
+
+    def test_update_stock_priority(self):
+        """종목 우선순위 변경 테스트"""
+        config = TradingConfig(
+            stocks=[
+                StockConfig("005930", "삼성전자", 1000000, 50000, 60000, priority=100),
+            ]
+        )
+
+        result = config.update_stock_priority("005930", 1)
+        assert result is True
+
+        stock = config.get_stock_by_code("005930")
+        assert stock.priority == 1
+
+    def test_update_stock_priority_not_found(self):
+        """존재하지 않는 종목 우선순위 변경 테스트"""
+        config = TradingConfig()
+        result = config.update_stock_priority("999999", 1)
+        assert result is False

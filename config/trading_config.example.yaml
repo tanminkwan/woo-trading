@@ -8,6 +8,9 @@ settings:
 
 stocks:
   # 종목 설정 예시
+  # priority: 우선순위 (낮을수록 먼저 처리, 기본값 100)
+  # 주문가능금액이 한정적일 때 우선순위가 높은 종목부터 주문
+
   - code: "005930"           # 종목코드
     name: "삼성전자"          # 종목명 (표시용)
     max_amount: 1000000      # 거래금액 상한 (원)
@@ -15,6 +18,7 @@ stocks:
     sell_price: 58000        # 매도 희망가 (이상일 때 매도)
     interval: 30             # 모니터링 주기 (초), 없으면 default 사용
     enabled: true            # 활성화 여부
+    priority: 1              # 우선순위 (가장 먼저 처리)
 
   - code: "000660"
     name: "SK하이닉스"
@@ -22,6 +26,7 @@ stocks:
     buy_price: 170000
     sell_price: 200000
     enabled: false
+    priority: 2              # 두 번째로 처리
 
   # 필요한 종목을 추가하세요
   # - code: "035420"
@@ -30,3 +35,4 @@ stocks:
   #   buy_price: 180000
   #   sell_price: 220000
   #   enabled: true
+  #   priority: 3            # 세 번째로 처리
