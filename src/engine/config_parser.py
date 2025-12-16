@@ -5,6 +5,41 @@ import yaml
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 from pathlib import Path
+from enum import Enum
+
+
+class TradingStrategy(Enum):
+    """거래 전략"""
+    RANGE_TRADING = "range_trading"           # 범위 매매 (기존)
+    VOLATILITY_BREAKOUT = "volatility_breakout"  # 변동성 돌파
+
+
+@dataclass
+class VolatilityBreakoutParams:
+    """변동성 돌파 전략 파라미터"""
+    k: float = 0.5                    # 변동성 계수 (0.1 ~ 1.0, 기본 0.5)
+    target_profit_rate: float = 2.0  # 목표 수익률 (%), 도달 시 매도
+    stop_loss_rate: float = -2.0     # 손절 수익률 (%), 도달 시 매도
+    sell_at_close: bool = True       # 장 마감 전 매도 여부
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "k": self.k,
+            "target_profit_rate": self.target_profit_rate,
+            "stop_loss_rate": self.stop_loss_rate,
+            "sell_at_close": self.sell_at_close,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "VolatilityBreakoutParams":
+        if not data:
+            return cls()
+        return cls(
+            k=float(data.get("k", 0.5)),
+            target_profit_rate=float(data.get("target_profit_rate", 2.0)),
+            stop_loss_rate=float(data.get("stop_loss_rate", -2.0)),
+            sell_at_close=bool(data.get("sell_at_close", True)),
+        )
 
 
 @dataclass
@@ -13,26 +48,39 @@ class StockConfig:
     code: str
     name: str
     max_amount: int
-    buy_price: int
-    sell_price: int
+    buy_price: int = 0                # range_trading 전용
+    sell_price: int = 0               # range_trading 전용
     interval: Optional[int] = None
     enabled: bool = True
-    priority: int = 100  # 우선순위 (낮을수록 높은 우선순위, 기본값 100)
+    priority: int = 100               # 우선순위 (낮을수록 높은 우선순위)
+    strategy: str = "range_trading"   # 전략: range_trading, volatility_breakout
+    vb_params: Optional[VolatilityBreakoutParams] = None  # 변동성 돌파 파라미터
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        result = {
             "code": self.code,
             "name": self.name,
             "max_amount": self.max_amount,
-            "buy_price": self.buy_price,
-            "sell_price": self.sell_price,
             "interval": self.interval,
             "enabled": self.enabled,
             "priority": self.priority,
+            "strategy": self.strategy,
         }
+        # 전략별 파라미터 추가
+        if self.strategy == TradingStrategy.RANGE_TRADING.value:
+            result["buy_price"] = self.buy_price
+            result["sell_price"] = self.sell_price
+        elif self.strategy == TradingStrategy.VOLATILITY_BREAKOUT.value and self.vb_params:
+            result["vb_params"] = self.vb_params.to_dict()
+        return result
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "StockConfig":
+        strategy = str(data.get("strategy", "range_trading"))
+        vb_params = None
+        if strategy == TradingStrategy.VOLATILITY_BREAKOUT.value:
+            vb_params = VolatilityBreakoutParams.from_dict(data.get("vb_params", {}))
+
         return cls(
             code=str(data.get("code", "")),
             name=str(data.get("name", "")),
@@ -42,6 +90,8 @@ class StockConfig:
             interval=data.get("interval"),
             enabled=bool(data.get("enabled", True)),
             priority=int(data.get("priority", 100)),
+            strategy=strategy,
+            vb_params=vb_params,
         )
 
 

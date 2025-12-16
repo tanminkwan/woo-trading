@@ -7,12 +7,16 @@ settings:
   max_daily_trades: 10  # 일일 최대 거래 횟수
 
 stocks:
-  # 종목 설정 예시
-  # priority: 우선순위 (낮을수록 먼저 처리, 기본값 100)
-  # 주문가능금액이 한정적일 때 우선순위가 높은 종목부터 주문
+  # ============================================
+  # 전략 1: 범위 매매 (Range Trading)
+  # ============================================
+  # 설정한 가격 범위에서 매수/매도
+  # - buy_price 이하일 때 매수
+  # - sell_price 이상일 때 매도
 
   - code: "005930"           # 종목코드
     name: "삼성전자"          # 종목명 (표시용)
+    strategy: "range_trading"  # 전략: range_trading (기본값)
     max_amount: 1000000      # 거래금액 상한 (원)
     buy_price: 52000         # 매수 희망가 (이하일 때 매수)
     sell_price: 58000        # 매도 희망가 (이상일 때 매도)
@@ -20,19 +24,44 @@ stocks:
     enabled: true            # 활성화 여부
     priority: 1              # 우선순위 (가장 먼저 처리)
 
+  # ============================================
+  # 전략 2: 변동성 돌파 (Volatility Breakout)
+  # ============================================
+  # 래리 윌리엄스의 변동성 돌파 전략
+  # 목표가 = 당일시가 + (전일고가 - 전일저가) * K
+  # 현재가가 목표가를 돌파하면 매수
+
   - code: "000660"
     name: "SK하이닉스"
+    strategy: "volatility_breakout"  # 변동성 돌파 전략
     max_amount: 500000
-    buy_price: 170000
-    sell_price: 200000
-    enabled: false
-    priority: 2              # 두 번째로 처리
+    enabled: true
+    priority: 2
+    vb_params:                       # 변동성 돌파 파라미터
+      k: 0.5                         # 변동성 계수 (0.1~1.0, 기본 0.5)
+      target_profit_rate: 2.0        # 목표 수익률 (%), 도달 시 매도
+      stop_loss_rate: -2.0           # 손절 수익률 (%), 도달 시 매도
+      sell_at_close: true            # 장 마감 전(15:15) 자동 매도
 
-  # 필요한 종목을 추가하세요
+  # 변동성 돌파 전략 예시 2 (공격적 설정)
   # - code: "035420"
   #   name: "NAVER"
+  #   strategy: "volatility_breakout"
   #   max_amount: 800000
-  #   buy_price: 180000
-  #   sell_price: 220000
   #   enabled: true
-  #   priority: 3            # 세 번째로 처리
+  #   priority: 3
+  #   vb_params:
+  #     k: 0.6                       # 더 높은 K값 = 더 보수적 진입
+  #     target_profit_rate: 3.0      # 목표 수익률 3%
+  #     stop_loss_rate: -1.5         # 손절 1.5%
+  #     sell_at_close: true
+
+  # 범위 매매 예시 (비활성화)
+  # - code: "035720"
+  #   name: "카카오"
+  #   strategy: "range_trading"
+  #   max_amount: 500000
+  #   buy_price: 35000
+  #   sell_price: 42000
+  #   enabled: false
+  #   priority: 4

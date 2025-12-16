@@ -6,7 +6,9 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from src.engine.config_parser import TradingConfig, StockConfig
+from src.engine.config_parser import (
+    TradingConfig, StockConfig, TradingStrategy, VolatilityBreakoutParams
+)
 
 
 class TestStockConfig:
@@ -246,3 +248,183 @@ class TestTradingConfig:
         config = TradingConfig()
         result = config.update_stock_priority("999999", 1)
         assert result is False
+
+
+class TestTradingStrategy:
+    """TradingStrategy 열거형 테스트"""
+
+    def test_strategy_values(self):
+        """전략 값 테스트"""
+        assert TradingStrategy.RANGE_TRADING.value == "range_trading"
+        assert TradingStrategy.VOLATILITY_BREAKOUT.value == "volatility_breakout"
+
+
+class TestVolatilityBreakoutParams:
+    """VolatilityBreakoutParams 테스트"""
+
+    def test_default_values(self):
+        """기본값 테스트"""
+        params = VolatilityBreakoutParams()
+        assert params.k == 0.5
+        assert params.target_profit_rate == 2.0
+        assert params.stop_loss_rate == -2.0
+        assert params.sell_at_close is True
+
+    def test_custom_values(self):
+        """커스텀 값 테스트"""
+        params = VolatilityBreakoutParams(
+            k=0.6,
+            target_profit_rate=3.0,
+            stop_loss_rate=-1.5,
+            sell_at_close=False,
+        )
+        assert params.k == 0.6
+        assert params.target_profit_rate == 3.0
+        assert params.stop_loss_rate == -1.5
+        assert params.sell_at_close is False
+
+    def test_to_dict(self):
+        """딕셔너리 변환 테스트"""
+        params = VolatilityBreakoutParams(k=0.7)
+        result = params.to_dict()
+        assert result["k"] == 0.7
+        assert "target_profit_rate" in result
+        assert "stop_loss_rate" in result
+        assert "sell_at_close" in result
+
+    def test_from_dict(self):
+        """딕셔너리에서 로드 테스트"""
+        data = {
+            "k": 0.4,
+            "target_profit_rate": 5.0,
+            "stop_loss_rate": -3.0,
+            "sell_at_close": False,
+        }
+        params = VolatilityBreakoutParams.from_dict(data)
+        assert params.k == 0.4
+        assert params.target_profit_rate == 5.0
+        assert params.stop_loss_rate == -3.0
+        assert params.sell_at_close is False
+
+    def test_from_dict_empty(self):
+        """빈 딕셔너리에서 로드 테스트 (기본값 사용)"""
+        params = VolatilityBreakoutParams.from_dict({})
+        assert params.k == 0.5
+        assert params.target_profit_rate == 2.0
+
+    def test_from_dict_none(self):
+        """None에서 로드 테스트"""
+        params = VolatilityBreakoutParams.from_dict(None)
+        assert params.k == 0.5
+
+
+class TestStockConfigStrategy:
+    """StockConfig 전략 관련 테스트"""
+
+    def test_default_strategy(self):
+        """기본 전략은 range_trading"""
+        config = StockConfig("005930", "삼성전자", 1000000)
+        assert config.strategy == "range_trading"
+        assert config.vb_params is None
+
+    def test_range_trading_strategy(self):
+        """범위 매매 전략 설정"""
+        config = StockConfig(
+            code="005930",
+            name="삼성전자",
+            max_amount=1000000,
+            buy_price=50000,
+            sell_price=60000,
+            strategy="range_trading",
+        )
+        assert config.strategy == "range_trading"
+        assert config.buy_price == 50000
+        assert config.sell_price == 60000
+
+    def test_volatility_breakout_strategy(self):
+        """변동성 돌파 전략 설정"""
+        vb_params = VolatilityBreakoutParams(k=0.5)
+        config = StockConfig(
+            code="005930",
+            name="삼성전자",
+            max_amount=1000000,
+            strategy="volatility_breakout",
+            vb_params=vb_params,
+        )
+        assert config.strategy == "volatility_breakout"
+        assert config.vb_params is not None
+        assert config.vb_params.k == 0.5
+
+    def test_to_dict_range_trading(self):
+        """범위 매매 전략 딕셔너리 변환"""
+        config = StockConfig(
+            code="005930",
+            name="삼성전자",
+            max_amount=1000000,
+            buy_price=50000,
+            sell_price=60000,
+            strategy="range_trading",
+        )
+        result = config.to_dict()
+        assert result["strategy"] == "range_trading"
+        assert result["buy_price"] == 50000
+        assert result["sell_price"] == 60000
+        assert "vb_params" not in result
+
+    def test_to_dict_volatility_breakout(self):
+        """변동성 돌파 전략 딕셔너리 변환"""
+        vb_params = VolatilityBreakoutParams(k=0.6)
+        config = StockConfig(
+            code="005930",
+            name="삼성전자",
+            max_amount=1000000,
+            strategy="volatility_breakout",
+            vb_params=vb_params,
+        )
+        result = config.to_dict()
+        assert result["strategy"] == "volatility_breakout"
+        assert "vb_params" in result
+        assert result["vb_params"]["k"] == 0.6
+
+    def test_from_dict_range_trading(self):
+        """딕셔너리에서 범위 매매 전략 로드"""
+        data = {
+            "code": "005930",
+            "name": "삼성전자",
+            "max_amount": 1000000,
+            "buy_price": 50000,
+            "sell_price": 60000,
+            "strategy": "range_trading",
+        }
+        config = StockConfig.from_dict(data)
+        assert config.strategy == "range_trading"
+        assert config.buy_price == 50000
+        assert config.vb_params is None
+
+    def test_from_dict_volatility_breakout(self):
+        """딕셔너리에서 변동성 돌파 전략 로드"""
+        data = {
+            "code": "005930",
+            "name": "삼성전자",
+            "max_amount": 1000000,
+            "strategy": "volatility_breakout",
+            "vb_params": {
+                "k": 0.7,
+                "target_profit_rate": 3.0,
+            },
+        }
+        config = StockConfig.from_dict(data)
+        assert config.strategy == "volatility_breakout"
+        assert config.vb_params is not None
+        assert config.vb_params.k == 0.7
+        assert config.vb_params.target_profit_rate == 3.0
+
+    def test_from_dict_no_strategy(self):
+        """전략 미지정 시 기본값 사용"""
+        data = {
+            "code": "005930",
+            "name": "삼성전자",
+            "max_amount": 1000000,
+        }
+        config = StockConfig.from_dict(data)
+        assert config.strategy == "range_trading"
