@@ -300,6 +300,44 @@ stocks:
 | `/api/stocks/{code}/delete` | POST | 종목 삭제 |
 | `/api/logs` | GET | 거래 로그 |
 
+## 트러블슈팅
+
+### Authentication failed 에러
+
+웹 UI에서 `시작` 버튼 클릭 시 `Authentication failed` 에러가 발생하는 경우:
+
+```
+2025-12-16 14:55:24,457 [ERROR] Authentication failed
+```
+
+**원인**: API Key가 해지되었거나 만료된 경우
+
+**해결 방법**:
+1. [KIS Developers](https://apiportal.koreainvestment.com/)에 로그인
+2. 새 API Key 발급 (APP KEY, APP SECRET)
+3. `.env` 파일 업데이트:
+   ```env
+   APP_KEY=new_app_key
+   APP_SECRET=new_app_secret
+   ```
+4. 웹 서버 재시작 후 다시 시도
+
+### 토큰 발급 제한 에러
+
+```
+EGW00133: 토큰 발급 제한
+```
+
+**원인**: 토큰은 1분에 1회만 발급 가능
+
+**해결 방법**: 60초 이상 대기 후 재시도
+
+### API 호출 제한
+
+**원인**: 초당 20회 API 호출 제한 초과
+
+**해결 방법**: 모니터링 주기(`interval`)를 늘려서 API 호출 빈도 감소
+
 ## 라이선스
 
 MIT License
