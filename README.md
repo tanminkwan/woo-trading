@@ -387,6 +387,208 @@ stocks:
 
 **전략별 로직은 위의 [거래 전략](#거래-전략) 섹션 참조**
 
+## 기능 흐름도
+
+### 전체 시스템 아키텍처
+
+```mermaid
+flowchart TB
+    subgraph UI["🖥️ Web UI"]
+        Dashboard[대시보드]
+        Config[설정 페이지]
+        Logs[거래 로그]
+    end
+
+    subgraph API["🔌 FastAPI"]
+        EngineAPI[엔진 제어 API]
+        StockAPI[종목 관리 API]
+        LogAPI[로그 조회 API]
+    end
+
+    subgraph Engine["⚙️ Trading Engine"]
+        Loop[메인 루프]
+        RangeStrategy[범위 매매]
+        VBStrategy[변동성 돌파]
+    end
+
+    subgraph Services["📦 Application Services"]
+        StockSvc[StockService]
+        AccountSvc[AccountService]
+        OrderSvc[OrderService]
+    end
+
+    subgraph Infra["🔧 Infrastructure"]
+        Auth[인증 관리]
+        HTTP[HTTP Client]
+        ConfigMgr[설정 관리]
+    end
+
+    subgraph External["🌐 External"]
+        KIS[한국투자증권 API]
+        YAML[YAML 설정 파일]
+    end
+
+    Dashboard --> EngineAPI
+    Config --> StockAPI
+    Logs --> LogAPI
+
+    EngineAPI --> Engine
+    StockAPI --> Engine
+    LogAPI --> Engine
+
+    Loop --> RangeStrategy
+    Loop --> VBStrategy
+
+    RangeStrategy --> StockSvc
+    RangeStrategy --> AccountSvc
+    RangeStrategy --> OrderSvc
+    VBStrategy --> StockSvc
+    VBStrategy --> AccountSvc
+    VBStrategy --> OrderSvc
+
+    StockSvc --> Auth
+    AccountSvc --> Auth
+    OrderSvc --> Auth
+
+    Auth --> HTTP
+    HTTP --> KIS
+    ConfigMgr --> YAML
+```
+
+### 자동매매 엔진 흐름
+
+```mermaid
+flowchart TD
+    Start([엔진 시작]) --> Auth{인증 성공?}
+    Auth -->|No| AuthFail[인증 실패]
+    Auth -->|Yes| Loop[메인 루프 시작]
+
+    Loop --> CheckDay{날짜 변경?}
+    CheckDay -->|Yes| ResetCount[일일 거래 횟수 초기화]
+    ResetCount --> GetStocks
+    CheckDay -->|No| GetStocks[활성 종목 조회]
+
+    GetStocks --> SortPriority[우선순위 정렬]
+    SortPriority --> ForEach{각 종목 처리}
+
+    ForEach --> CheckInterval{모니터링 주기 도래?}
+    CheckInterval -->|No| ForEach
+    CheckInterval -->|Yes| CheckStrategy{전략 확인}
+
+    CheckStrategy -->|Range| RangeProcess[범위 매매 처리]
+    CheckStrategy -->|VB| VBProcess[변동성 돌파 처리]
+
+    RangeProcess --> NextStock
+    VBProcess --> NextStock
+
+    NextStock{다음 종목?} -->|Yes| ForEach
+    NextStock -->|No| Sleep[1초 대기]
+    Sleep --> CheckStop{정지 요청?}
+    CheckStop -->|No| Loop
+    CheckStop -->|Yes| End([엔진 종료])
+```
+
+### 범위 매매 전략 흐름
+
+```mermaid
+flowchart TD
+    Start([범위 매매 시작]) --> GetPrice[현재가 조회]
+    GetPrice --> GetBalance[보유 수량 조회]
+    GetBalance --> UpdateStatus[상태 업데이트]
+
+    UpdateStatus --> CheckLimit{일일 거래 제한?}
+    CheckLimit -->|Yes| End([종료])
+    CheckLimit -->|No| CheckHolding{보유 중?}
+
+    CheckHolding -->|Yes| CheckSell{현재가 >= 매도가?}
+    CheckSell -->|Yes| ExecuteSell[매도 주문]
+    CheckSell -->|No| End
+
+    CheckHolding -->|No| CheckBuy{현재가 <= 매수가?}
+    CheckBuy -->|Yes| CalcQty[매수 수량 계산]
+    CalcQty --> ExecuteBuy[매수 주문]
+    CheckBuy -->|No| End
+
+    ExecuteSell --> LogTrade[거래 로그 기록]
+    ExecuteBuy --> LogTrade
+    LogTrade --> End
+```
+
+### 변동성 돌파 전략 흐름
+
+```mermaid
+flowchart TD
+    Start([변동성 돌파 시작]) --> CheckTime{장 운영시간?<br/>09:00~15:20}
+    CheckTime -->|No| End([종료])
+    CheckTime -->|Yes| LoadData{일별 데이터 로드됨?}
+
+    LoadData -->|No| FetchDaily[전일 고가/저가 조회]
+    FetchDaily --> CalcTarget
+    LoadData -->|Yes| CalcTarget[목표가 계산<br/>시가 + Range × K]
+
+    CalcTarget --> GetPrice[현재가 조회]
+    GetPrice --> GetBalance[보유 수량 조회]
+    GetBalance --> UpdateStatus[상태 업데이트]
+
+    UpdateStatus --> CheckLimit{일일 거래 제한?}
+    CheckLimit -->|Yes| End
+    CheckLimit -->|No| CheckHolding{보유 중?}
+
+    CheckHolding -->|Yes| CalcProfit[수익률 계산]
+    CalcProfit --> CheckTarget{수익률 >= 목표?}
+    CheckTarget -->|Yes| ExecuteSell[매도 - 목표 달성]
+    CheckTarget -->|No| CheckStop{수익률 <= 손절?}
+    CheckStop -->|Yes| ExecuteStopLoss[매도 - 손절]
+    CheckStop -->|No| CheckClose{15:15 이후?}
+    CheckClose -->|Yes| ExecuteClose[매도 - 장마감]
+    CheckClose -->|No| End
+
+    CheckHolding -->|No| CheckBought{당일 매수 완료?}
+    CheckBought -->|Yes| End
+    CheckBought -->|No| CheckBreakout{현재가 >= 목표가?}
+    CheckBreakout -->|Yes| ExecuteBuy[매수 주문]
+    CheckBreakout -->|No| End
+
+    ExecuteSell --> LogTrade[거래 로그 기록]
+    ExecuteStopLoss --> LogTrade
+    ExecuteClose --> LogTrade
+    ExecuteBuy --> MarkBought[당일 매수 완료 표시]
+    MarkBought --> LogTrade
+    LogTrade --> End
+```
+
+### Web UI 흐름
+
+```mermaid
+flowchart LR
+    subgraph 대시보드
+        Status[엔진 상태]
+        Stats[거래 통계]
+        StockList[종목 현황]
+        Realtime[실시간 갱신]
+    end
+
+    subgraph 설정
+        SelectStrategy[전략 선택]
+        RangeParams[범위 매매 파라미터]
+        VBParams[VB 파라미터]
+        AddStock[종목 추가]
+        ManageStock[종목 관리]
+    end
+
+    subgraph 거래로그
+        ViewLogs[로그 조회]
+        FilterLogs[필터링]
+    end
+
+    Status -->|시작/정지| Engine[Trading Engine]
+    StockList -->|토글| Engine
+    AddStock -->|저장| YAML[(YAML 설정)]
+    ManageStock -->|삭제| YAML
+    Engine -->|상태| Realtime
+    Engine -->|기록| ViewLogs
+```
+
 ### API 엔드포인트
 
 | 엔드포인트 | 메서드 | 설명 |
