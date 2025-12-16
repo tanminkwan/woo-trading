@@ -8,6 +8,8 @@
 - **계좌 조회**: 잔고, 보유종목, 주문가능금액
 - **주문**: 매수/매도 (시장가/지정가)
 - **주문 내역**: 당일 주문/체결 조회
+- **자동매매 엔진**: YAML 설정 기반 자동 매매
+- **웹 관리 화면**: 종목 등록/관리, 엔진 제어, 거래 로그
 
 ## 설치
 
@@ -238,6 +240,65 @@ python -m pytest tests/ -v --cov=src
 | 카카오 | 035720 |
 | KODEX 200 | 069500 |
 | KODEX 코스닥150 | 229200 |
+
+## 자동매매 엔진
+
+### 웹 서버 실행
+
+```bash
+python run_web.py
+```
+
+브라우저에서 http://localhost:8000 접속
+
+### 웹 화면 기능
+
+| 페이지 | 기능 |
+|--------|------|
+| **대시보드** | 엔진 상태, 종목 현황, 실시간 모니터링 |
+| **설정** | 종목 추가/삭제, 활성화 토글 |
+| **거래로그** | 매수/매도 기록 조회 |
+
+### YAML 설정 파일
+
+`config/trading_config.yaml`:
+
+```yaml
+settings:
+  default_interval: 60    # 기본 모니터링 주기 (초)
+  max_daily_trades: 10    # 일일 최대 거래 횟수
+
+stocks:
+  - code: "005930"        # 종목코드
+    name: "삼성전자"       # 종목명
+    max_amount: 1000000   # 거래금액 상한
+    buy_price: 52000      # 매수 희망가 (이하일 때 매수)
+    sell_price: 58000     # 매도 희망가 (이상일 때 매도)
+    interval: 30          # 개별 모니터링 주기
+    enabled: true         # 활성화 여부
+```
+
+### 자동매매 로직
+
+1. **모니터링**: 설정된 주기마다 현재가 조회
+2. **매수 조건**: 현재가 ≤ 매수가 AND 주문가능금액 있음
+3. **매도 조건**: 현재가 ≥ 매도가 AND 보유수량 있음
+4. **거래 제한**: 일일 최대 거래 횟수 초과 시 중단
+
+### API 엔드포인트
+
+| 엔드포인트 | 메서드 | 설명 |
+|------------|--------|------|
+| `/api/engine/start` | POST | 엔진 시작 |
+| `/api/engine/stop` | POST | 엔진 정지 |
+| `/api/engine/pause` | POST | 일시정지 |
+| `/api/engine/resume` | POST | 재개 |
+| `/api/engine/status` | GET | 상태 조회 |
+| `/api/stocks` | GET | 종목 목록 |
+| `/api/stocks` | POST | 종목 추가 |
+| `/api/stocks/{code}/toggle` | POST | 활성화 토글 |
+| `/api/stocks/{code}/delete` | POST | 종목 삭제 |
+| `/api/logs` | GET | 거래 로그 |
 
 ## 라이선스
 

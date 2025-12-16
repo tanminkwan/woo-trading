@@ -59,3 +59,6 @@ Thumbs.db
 
 # 기존 레거시 파일
 한투.txt
+
+# 사용자 설정 (예시 파일 제외)
+config/trading_config.yaml

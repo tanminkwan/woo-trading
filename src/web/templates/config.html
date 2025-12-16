@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block title %}설정 - Auto Trading{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>종목 추가</h2>
+    <form action="/api/stocks" method="post">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="code">종목코드</label>
+                <input type="text" id="code" name="code" placeholder="005930" required>
+            </div>
+            <div class="form-group">
+                <label for="name">종목명</label>
+                <input type="text" id="name" name="name" placeholder="삼성전자" required>
+            </div>
+            <div class="form-group">
+                <label for="max_amount">거래금액 상한</label>
+                <input type="number" id="max_amount" name="max_amount" placeholder="1000000" required>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="buy_price">매수가 (이하 시 매수)</label>
+                <input type="number" id="buy_price" name="buy_price" placeholder="50000" required>
+            </div>
+            <div class="form-group">
+                <label for="sell_price">매도가 (이상 시 매도)</label>
+                <input type="number" id="sell_price" name="sell_price" placeholder="60000" required>
+            </div>
+            <div class="form-group">
+                <label for="interval">모니터링 주기 (초)</label>
+                <input type="number" id="interval" name="interval" placeholder="60">
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">종목 추가</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>등록된 종목</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>종목명</th>
+                <th>코드</th>
+                <th>거래금액 상한</th>
+                <th>매수가</th>
+                <th>매도가</th>
+                <th>주기(초)</th>
+                <th>활성화</th>
+                <th>관리</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for stock in stocks %}
+            <tr>
+                <td>{{ stock.name }}</td>
+                <td>{{ stock.code }}</td>
+                <td>{{ "{:,}".format(stock.max_amount) }}원</td>
+                <td>{{ "{:,}".format(stock.buy_price) }}원</td>
+                <td>{{ "{:,}".format(stock.sell_price) }}원</td>
+                <td>{{ stock.interval or config.default_interval }}</td>
+                <td>
+                    <label class="toggle-switch">
+                        <input type="checkbox" {% if stock.enabled %}checked{% endif %} onchange="toggleStock('{{ stock.code }}')">
+                        <span class="slider"></span>
+                    </label>
+                </td>
+                <td>
+                    <button class="btn btn-danger btn-sm" onclick="deleteStock('{{ stock.code }}', '{{ stock.name }}')">삭제</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card">
+    <h2>전역 설정</h2>
+    <div class="form-row">
+        <div class="form-group">
+            <label>기본 모니터링 주기</label>
+            <input type="text" value="{{ config.default_interval }}초" disabled>
+        </div>
+        <div class="form-group">
+            <label>일일 최대 거래 횟수</label>
+            <input type="text" value="{{ config.max_daily_trades }}회" disabled>
+        </div>
+    </div>
+    <p style="color: #666; font-size: 0.9rem;">
+        * 전역 설정은 config/trading_config.yaml 파일에서 직접 수정해주세요.
+    </p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function toggleStock(code) {
+        const result = await apiCall(`/api/stocks/${code}/toggle`);
+        if (!result.success) {
+            alert('상태 변경에 실패했습니다.');
+            refreshPage();
+        }
+    }
+
+    async function deleteStock(code, name) {
+        if (confirm(`${name}(${code}) 종목을 삭제하시겠습니까?`)) {
+            const result = await apiCall(`/api/stocks/${code}/delete`);
+            if (result.success) {
+                refreshPage();
+            } else {
+                alert('삭제에 실패했습니다.');
+            }
+        }
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}거래 로그 - Auto Trading{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>거래 로그</h2>
+    <div style="margin-bottom: 1rem;">
+        <button class="btn btn-primary" onclick="refreshLogs()">새로고침</button>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>시각</th>
+                <th>종목</th>
+                <th>구분</th>
+                <th>수량</th>
+                <th>가격</th>
+                <th>결과</th>
+                <th>메시지</th>
+            </tr>
+        </thead>
+        <tbody id="logs-body">
+            {% for log in logs %}
+            <tr>
+                <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                <td>{{ log.stock_name }}({{ log.stock_code }})</td>
+                <td>
+                    <span class="status-badge {% if log.action == 'buy' %}status-running{% else %}status-paused{% endif %}">
+                        {% if log.action == 'buy' %}매수{% else %}매도{% endif %}
+                    </span>
+                </td>
+                <td>{{ log.quantity }}주</td>
+                <td>{{ "{:,}".format(log.price) }}원</td>
+                <td>
+                    <span class="status-badge {% if log.success %}status-running{% else %}status-stopped{% endif %}">
+                        {% if log.success %}성공{% else %}실패{% endif %}
+                    </span>
+                </td>
+                <td>{{ log.message }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="7" style="text-align: center; color: #666;">거래 로그가 없습니다.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function refreshLogs() {
+        try {
+            const response = await fetch('/api/logs?limit=50');
+            const data = await response.json();
+
+            const tbody = document.getElementById('logs-body');
+
+            if (data.logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #666;">거래 로그가 없습니다.</td></tr>';
+                return;
+            }
+
+            let html = '';
+            for (const log of data.logs.reverse()) {
+                const timestamp = new Date(log.timestamp).toLocaleString('ko-KR');
+                const actionClass = log.action === 'buy' ? 'status-running' : 'status-paused';
+                const actionText = log.action === 'buy' ? '매수' : '매도';
+                const resultClass = log.success ? 'status-running' : 'status-stopped';
+                const resultText = log.success ? '성공' : '실패';
+
+                html += `
+                <tr>
+                    <td>${timestamp}</td>
+                    <td>${log.stock_name}(${log.stock_code})</td>
+                    <td><span class="status-badge ${actionClass}">${actionText}</span></td>
+                    <td>${log.quantity}주</td>
+                    <td>${log.price.toLocaleString()}원</td>
+                    <td><span class="status-badge ${resultClass}">${resultText}</span></td>
+                    <td>${log.message}</td>
+                </tr>`;
+            }
+
+            tbody.innerHTML = html;
+        } catch (error) {
+            console.error('Failed to refresh logs:', error);
+        }
+    }
+
+    // 10초마다 로그 업데이트
+    setInterval(refreshLogs, 10000);
+</script>
+{% endblock %}

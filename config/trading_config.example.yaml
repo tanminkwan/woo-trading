@@ -1,0 +1,32 @@
+# 자동매매 설정 파일 예시
+# 이 파일을 trading_config.yaml로 복사하여 사용하세요
+
+settings:
+  # 전역 설정
+  default_interval: 60  # 기본 모니터링 주기 (초)
+  max_daily_trades: 10  # 일일 최대 거래 횟수
+
+stocks:
+  # 종목 설정 예시
+  - code: "005930"           # 종목코드
+    name: "삼성전자"          # 종목명 (표시용)
+    max_amount: 1000000      # 거래금액 상한 (원)
+    buy_price: 52000         # 매수 희망가 (이하일 때 매수)
+    sell_price: 58000        # 매도 희망가 (이상일 때 매도)
+    interval: 30             # 모니터링 주기 (초), 없으면 default 사용
+    enabled: true            # 활성화 여부
+
+  - code: "000660"
+    name: "SK하이닉스"
+    max_amount: 500000
+    buy_price: 170000
+    sell_price: 200000
+    enabled: false
+
+  # 필요한 종목을 추가하세요
+  # - code: "035420"
+  #   name: "NAVER"
+  #   max_amount: 800000
+  #   buy_price: 180000
+  #   sell_price: 220000
+  #   enabled: true

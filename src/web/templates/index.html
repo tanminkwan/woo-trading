@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}대시보드 - Auto Trading{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>엔진 상태</h2>
+    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+        <span class="status-badge status-{{ status }}">
+            {% if status == 'running' %}실행 중{% elif status == 'paused' %}일시정지{% else %}정지됨{% endif %}
+        </span>
+        <div style="margin-left: auto;">
+            {% if status == 'stopped' %}
+            <button class="btn btn-success" onclick="startEngine()">시작</button>
+            {% elif status == 'running' %}
+            <button class="btn btn-warning" onclick="pauseEngine()">일시정지</button>
+            <button class="btn btn-danger" onclick="stopEngine()">정지</button>
+            {% else %}
+            <button class="btn btn-success" onclick="resumeEngine()">재개</button>
+            <button class="btn btn-danger" onclick="stopEngine()">정지</button>
+            {% endif %}
+        </div>
+    </div>
+    <div class="grid">
+        <div class="stat-card">
+            <h3>오늘 거래</h3>
+            <div class="value">{{ summary.daily_trade_count }} / {{ summary.max_daily_trades }}</div>
+        </div>
+        <div class="stat-card" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+            <h3>활성 종목</h3>
+            <div class="value">{{ summary.enabled_stocks }} / {{ summary.total_stocks }}</div>
+        </div>
+        <div class="stat-card" style="background: linear-gradient(135deg, #ee0979 0%, #ff6a00 100%);">
+            <h3>거래 로그</h3>
+            <div class="value">{{ summary.trade_logs_count }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>등록 종목</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>종목명</th>
+                <th>코드</th>
+                <th>현재가</th>
+                <th>매수가</th>
+                <th>매도가</th>
+                <th>보유수량</th>
+                <th>수익률</th>
+                <th>상태</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for stock in stocks %}
+            <tr>
+                <td>{{ stock.name }}</td>
+                <td>{{ stock.code }}</td>
+                <td>
+                    {% if stock.code in stock_status %}
+                    {{ "{:,}".format(stock_status[stock.code].current_price) }}원
+                    {% else %}-{% endif %}
+                </td>
+                <td>{{ "{:,}".format(stock.buy_price) }}원</td>
+                <td>{{ "{:,}".format(stock.sell_price) }}원</td>
+                <td>
+                    {% if stock.code in stock_status %}
+                    {{ stock_status[stock.code].holding_qty }}주
+                    {% else %}-{% endif %}
+                </td>
+                <td>
+                    {% if stock.code in stock_status %}
+                    <span class="{% if stock_status[stock.code].profit_rate >= 0 %}profit-positive{% else %}profit-negative{% endif %}">
+                        {{ "%.2f"|format(stock_status[stock.code].profit_rate) }}%
+                    </span>
+                    {% else %}-{% endif %}
+                </td>
+                <td>
+                    <span class="status-badge {% if stock.enabled %}status-running{% else %}status-stopped{% endif %}">
+                        {% if stock.enabled %}활성{% else %}비활성{% endif %}
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card">
+    <h2>실시간 상태</h2>
+    <div id="realtime-status">
+        <p>상태를 불러오는 중...</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function startEngine() {
+        const result = await apiCall('/api/engine/start');
+        alert(result.message);
+        refreshPage();
+    }
+
+    async function stopEngine() {
+        if (confirm('정말 엔진을 정지하시겠습니까?')) {
+            const result = await apiCall('/api/engine/stop');
+            alert(result.message);
+            refreshPage();
+        }
+    }
+
+    async function pauseEngine() {
+        const result = await apiCall('/api/engine/pause');
+        alert(result.message);
+        refreshPage();
+    }
+
+    async function resumeEngine() {
+        const result = await apiCall('/api/engine/resume');
+        alert(result.message);
+        refreshPage();
+    }
+
+    async function updateStatus() {
+        try {
+            const response = await fetch('/api/engine/status');
+            const data = await response.json();
+
+            let html = `<p><strong>상태:</strong> ${data.status}</p>`;
+            html += `<p><strong>오늘 거래:</strong> ${data.summary.daily_trade_count}건</p>`;
+
+            if (Object.keys(data.stock_status).length > 0) {
+                html += '<h4 style="margin-top:1rem">종목별 현황</h4><ul>';
+                for (const [code, status] of Object.entries(data.stock_status)) {
+                    html += `<li>${status.name}(${code}): ${status.current_price.toLocaleString()}원, ${status.holding_qty}주 보유</li>`;
+                }
+                html += '</ul>';
+            }
+
+            document.getElementById('realtime-status').innerHTML = html;
+        } catch (error) {
+            console.error('Failed to update status:', error);
+        }
+    }
+
+    // 5초마다 상태 업데이트
+    updateStatus();
+    setInterval(updateStatus, 5000);
+</script>
+{% endblock %}

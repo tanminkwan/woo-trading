@@ -12,7 +12,11 @@
       "Bash(del account.py auth.py config.py order.py stock.py nul)",
       "Bash(dir:*)",
       "Bash(ls:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git remote add:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)"
     ]
   }
 }
