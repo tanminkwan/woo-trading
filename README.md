@@ -215,8 +215,19 @@ python -m pytest tests/ -v
 python -m pytest tests/test_stock_service.py -v
 
 # 커버리지 포함
-python -m pytest tests/ -v --cov=src
+python -m pytest tests/ -v --cov=src --cov-report=term-missing
 ```
+
+### 테스트 커버리지
+
+| 모듈 | 커버리지 |
+|------|----------|
+| domain/models.py | 90% |
+| application/ | 85-92% |
+| engine/config_parser.py | 91% |
+| **전체** | **62%** |
+
+총 87개 테스트 케이스
 
 ## 주의사항
 

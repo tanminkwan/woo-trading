@@ -5,7 +5,7 @@
 {% block content %}
 <div class="card">
     <h2>종목 추가</h2>
-    <form action="/api/stocks" method="post">
+    <form action="/api/stocks" method="post" id="addStockForm">
         <div class="form-row">
             <div class="form-group">
                 <label for="code">종목코드</label>
@@ -22,18 +22,63 @@
         </div>
         <div class="form-row">
             <div class="form-group">
-                <label for="buy_price">매수가 (이하 시 매수)</label>
-                <input type="number" id="buy_price" name="buy_price" placeholder="50000" required>
+                <label for="strategy">거래 전략</label>
+                <select id="strategy" name="strategy" onchange="toggleStrategyParams()">
+                    <option value="range_trading">범위 매매 (Range Trading)</option>
+                    <option value="volatility_breakout">변동성 돌파 (Volatility Breakout)</option>
+                </select>
             </div>
             <div class="form-group">
-                <label for="sell_price">매도가 (이상 시 매도)</label>
-                <input type="number" id="sell_price" name="sell_price" placeholder="60000" required>
+                <label for="priority">우선순위</label>
+                <input type="number" id="priority" name="priority" placeholder="100" value="100">
             </div>
             <div class="form-group">
                 <label for="interval">모니터링 주기 (초)</label>
                 <input type="number" id="interval" name="interval" placeholder="60">
             </div>
         </div>
+
+        <!-- 범위 매매 파라미터 -->
+        <div id="range-params" class="vb-params show">
+            <h4>범위 매매 설정</h4>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="buy_price">매수가 (이하 시 매수)</label>
+                    <input type="number" id="buy_price" name="buy_price" placeholder="50000">
+                </div>
+                <div class="form-group">
+                    <label for="sell_price">매도가 (이상 시 매도)</label>
+                    <input type="number" id="sell_price" name="sell_price" placeholder="60000">
+                </div>
+            </div>
+        </div>
+
+        <!-- 변동성 돌파 파라미터 -->
+        <div id="vb-params" class="vb-params">
+            <h4>변동성 돌파 설정</h4>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="vb_k">K값 (변동성 계수)</label>
+                    <input type="number" id="vb_k" name="vb_k" step="0.1" min="0.1" max="1.0" value="0.5">
+                </div>
+                <div class="form-group">
+                    <label for="vb_target">목표 수익률 (%)</label>
+                    <input type="number" id="vb_target" name="vb_target" step="0.1" value="2.0">
+                </div>
+                <div class="form-group">
+                    <label for="vb_stop">손절 수익률 (%)</label>
+                    <input type="number" id="vb_stop" name="vb_stop" step="0.1" value="-2.0">
+                </div>
+                <div class="form-group">
+                    <label for="vb_close">장마감 전 매도</label>
+                    <select id="vb_close" name="vb_close">
+                        <option value="true">예</option>
+                        <option value="false">아니오</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
         <button type="submit" class="btn btn-primary">종목 추가</button>
     </form>
 </div>
@@ -45,10 +90,11 @@
             <tr>
                 <th>종목명</th>
                 <th>코드</th>
-                <th>거래금액 상한</th>
-                <th>매수가</th>
-                <th>매도가</th>
-                <th>주기(초)</th>
+                <th>전략</th>
+                <th>거래금액</th>
+                <th>매수조건</th>
+                <th>매도조건</th>
+                <th>우선순위</th>
                 <th>활성화</th>
                 <th>관리</th>
             </tr>
@@ -58,10 +104,33 @@
             <tr>
                 <td>{{ stock.name }}</td>
                 <td>{{ stock.code }}</td>
+                <td>
+                    {% if stock.strategy == 'volatility_breakout' %}
+                    <span class="strategy-badge strategy-vb">VB</span>
+                    {% else %}
+                    <span class="strategy-badge strategy-range">Range</span>
+                    {% endif %}
+                </td>
                 <td>{{ "{:,}".format(stock.max_amount) }}원</td>
-                <td>{{ "{:,}".format(stock.buy_price) }}원</td>
-                <td>{{ "{:,}".format(stock.sell_price) }}원</td>
-                <td>{{ stock.interval or config.default_interval }}</td>
+                <td>
+                    {% if stock.strategy == 'volatility_breakout' %}
+                    K={{ stock.vb_params.k if stock.vb_params else 0.5 }}
+                    {% else %}
+                    ≤ {{ "{:,}".format(stock.buy_price) }}원
+                    {% endif %}
+                </td>
+                <td>
+                    {% if stock.strategy == 'volatility_breakout' %}
+                        {% if stock.vb_params %}
+                        +{{ stock.vb_params.target_profit_rate }}% / {{ stock.vb_params.stop_loss_rate }}%
+                        {% else %}
+                        +2.0% / -2.0%
+                        {% endif %}
+                    {% else %}
+                    ≥ {{ "{:,}".format(stock.sell_price) }}원
+                    {% endif %}
+                </td>
+                <td>{{ stock.priority }}</td>
                 <td>
                     <label class="toggle-switch">
                         <input type="checkbox" {% if stock.enabled %}checked{% endif %} onchange="toggleStock('{{ stock.code }}')">
@@ -97,6 +166,20 @@
 
 {% block scripts %}
 <script>
+    function toggleStrategyParams() {
+        const strategy = document.getElementById('strategy').value;
+        const rangeParams = document.getElementById('range-params');
+        const vbParams = document.getElementById('vb-params');
+
+        if (strategy === 'volatility_breakout') {
+            rangeParams.classList.remove('show');
+            vbParams.classList.add('show');
+        } else {
+            rangeParams.classList.add('show');
+            vbParams.classList.remove('show');
+        }
+    }
+
     async function toggleStock(code) {
         const result = await apiCall(`/api/stocks/${code}/toggle`);
         if (!result.success) {

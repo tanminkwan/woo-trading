@@ -16,7 +16,9 @@
       "Bash(git commit:*)",
       "Bash(git remote add:*)",
       "Bash(git branch:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(python -m pytest tests/ -v --cov=src --cov-report=term-missing)",
+      "Bash(python -m pytest:*)"
     ]
   }
 }

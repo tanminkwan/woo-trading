@@ -10,7 +10,7 @@ from typing import Optional
 import logging
 
 from ..factory import KISClient
-from ..engine.config_parser import TradingConfig, StockConfig
+from ..engine.config_parser import TradingConfig, StockConfig, VolatilityBreakoutParams
 from ..engine.trading_engine import TradingEngine, EngineStatus
 
 logger = logging.getLogger(__name__)
@@ -126,6 +126,11 @@ def create_app() -> FastAPI:
                 "holding_qty": v.holding_qty,
                 "profit_rate": v.profit_rate,
                 "last_check": v.last_check.isoformat() if v.last_check else None,
+                "target_price": v.target_price,
+                "prev_high": v.prev_high,
+                "prev_low": v.prev_low,
+                "today_open": v.today_open,
+                "vb_bought_today": v.vb_bought_today,
             } for k, v in engine.stock_status.items()},
         }
 
@@ -140,13 +145,30 @@ def create_app() -> FastAPI:
         code: str = Form(...),
         name: str = Form(...),
         max_amount: int = Form(...),
-        buy_price: int = Form(...),
-        sell_price: int = Form(...),
+        strategy: str = Form("range_trading"),
+        buy_price: int = Form(0),
+        sell_price: int = Form(0),
         interval: Optional[int] = Form(None),
         enabled: bool = Form(True),
+        priority: int = Form(100),
+        vb_k: float = Form(0.5),
+        vb_target: float = Form(2.0),
+        vb_stop: float = Form(-2.0),
+        vb_close: str = Form("true"),
     ):
         """종목 추가 API"""
         engine = get_engine()
+
+        # 변동성 돌파 파라미터 설정
+        vb_params = None
+        if strategy == "volatility_breakout":
+            vb_params = VolatilityBreakoutParams(
+                k=vb_k,
+                target_profit_rate=vb_target,
+                stop_loss_rate=vb_stop,
+                sell_at_close=(vb_close.lower() == "true"),
+            )
+
         stock = StockConfig(
             code=code,
             name=name,
@@ -155,6 +177,9 @@ def create_app() -> FastAPI:
             sell_price=sell_price,
             interval=interval,
             enabled=enabled,
+            priority=priority,
+            strategy=strategy,
+            vb_params=vb_params,
         )
         engine.config.add_stock(stock)
         engine.save_config()
