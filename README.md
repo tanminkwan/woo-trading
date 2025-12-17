@@ -12,44 +12,51 @@
 - **데스크톱 관리 앱**: Electron 기반 GUI (종목 관리, 엔진 제어, 거래 로그)
 - **백테스트**: 과거 데이터 기반 전략 시뮬레이션 (일봉/분봉)
 
-## 설치
+## 문서
+
+| 문서 | 내용 |
+|------|------|
+| [설치 가이드](docs/INSTALL.md) | 배포된 앱 설치 및 설정 방법 |
+| [빌드 가이드](docs/BUILD.md) | 소스 코드에서 빌드하는 방법 |
+
+## 빠른 시작
+
+### 배포된 앱 사용 (일반 사용자)
+
+1. `AutoStock Setup x.x.x.exe` 다운로드 및 설치
+2. 설치 후 `resources/config/.env` 파일 생성
+3. API Key 및 계좌번호 설정
+4. 앱 실행
+
+자세한 내용: [설치 가이드](docs/INSTALL.md)
+
+### 소스에서 빌드 (개발자)
 
 ```bash
-# 저장소 클론
-git clone https://github.com/your-repo/auto-stock.git
-cd auto-stock
-
-# Python 의존성 설치
+# 의존성 설치
 pip install -r requirements.txt
+cd electron && npm install && cd renderer && npm install && cd ../..
 
-# Electron 앱 의존성 설치
-cd electron && npm install
-cd renderer && npm install
-cd ../..
+# 전체 빌드
+python build.py
 ```
+
+자세한 내용: [빌드 가이드](docs/BUILD.md)
 
 ## 설정
 
-### 1. 한국투자증권 API 발급
-
-1. [KIS Developers](https://apiportal.koreainvestment.com/) 가입
-2. API 신청 → APP KEY, APP SECRET 발급
-
-### 2. 환경변수 설정
-
-`.env` 파일 생성:
+### 환경변수 (.env)
 
 ```env
-# API 인증 정보
 APP_KEY=your_app_key
 APP_SECRET=your_app_secret
-
-# 계좌번호 (XXXXXXXX-XX 형식)
 ACCOUNT_NO=12345678-01
-
-# 환경 설정 (prod: 실전투자, dev: 모의투자)
-ENV=dev
+ENV=dev  # dev: 모의투자, prod: 실전투자
 ```
+
+**파일 위치**:
+- 개발: 프로젝트 루트 `.env`
+- 설치 앱: `resources/config/.env`
 
 ## 사용법
 
@@ -303,20 +310,7 @@ python -m pytest tests/ -v --cov=src --cov-report=term-missing
 
 ```bash
 # 개발 모드 실행
-cd electron && npx electron .
-
-# 또는 React 개발 서버와 함께 실행
 cd electron && npm run dev
-```
-
-### 배포용 빌드
-
-```bash
-# 전체 빌드 (Python + Electron)
-python build.py
-
-# Windows 설치 파일 생성
-cd electron && npm run dist:win
 ```
 
 ### 데스크톱 앱 화면
