@@ -2,6 +2,7 @@
 RPC Handler - JSON-RPC 메서드 핸들러
 """
 import logging
+import os
 from typing import Any, Dict, Optional
 
 from ..factory import KISClient
@@ -17,8 +18,11 @@ from ..backtest.data_provider import (
 
 logger = logging.getLogger(__name__)
 
-# 기본 설정 경로
-CONFIG_PATH = "config/trading_config.yaml"
+
+def get_config_path() -> str:
+    """설정 파일 경로 반환 (production/dev 환경 지원)"""
+    config_dir = os.environ.get('AUTOSTOCK_CONFIG_DIR', 'config')
+    return os.path.join(config_dir, 'trading_config.yaml')
 
 
 class RpcHandler:
@@ -27,7 +31,7 @@ class RpcHandler:
     def __init__(self):
         self._engine: Optional[TradingEngine] = None
         self._client: Optional[KISClient] = None
-        self._config_path = CONFIG_PATH
+        self._config_path = get_config_path()
 
     def _get_engine(self) -> TradingEngine:
         """엔진 인스턴스 반환 (지연 초기화)"""

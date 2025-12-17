@@ -9,10 +9,23 @@ import os
 if getattr(sys, 'frozen', False):
     # PyInstaller로 빌드된 경우
     base_path = sys._MEIPASS
+    # Production: resources 폴더에서 config 파일 로드
+    exe_dir = os.path.dirname(sys.executable)
+    config_dir = os.path.join(os.path.dirname(exe_dir), 'config')
 else:
     base_path = os.path.dirname(os.path.abspath(__file__))
+    config_dir = os.path.join(base_path, 'config')
 
 sys.path.insert(0, base_path)
+
+# 환경 변수로 config 경로 전달
+os.environ['AUTOSTOCK_CONFIG_DIR'] = config_dir
+
+# .env 파일 로드 (production에서는 config 폴더에서)
+env_file = os.path.join(config_dir, '.env')
+if os.path.exists(env_file):
+    from dotenv import load_dotenv
+    load_dotenv(env_file)
 
 # Windows에서 UTF-8 인코딩 강제 설정
 if sys.platform == 'win32':
