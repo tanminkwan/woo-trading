@@ -4,8 +4,8 @@ const PythonBridge = require('./python-bridge');
 
 // 개발 모드 확인
 const isDev = !app.isPackaged;
-// Vite 개발 서버 사용 여부 (NODE_ENV=development 시에만)
-const useDevServer = process.env.NODE_ENV === 'development';
+// Vite 개발 서버 사용 여부 (패키지되지 않았으면 개발 서버 사용)
+const useDevServer = isDev;
 
 let mainWindow = null;
 let pythonBridge = null;

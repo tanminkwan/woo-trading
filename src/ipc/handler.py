@@ -200,10 +200,32 @@ class RpcHandler:
             raise ValueError(f"Stock not found: {code}")
 
         # 업데이트 가능한 필드
+        if 'name' in params:
+            stock.name = params['name']
+        if 'strategy' in params:
+            stock.strategy = params['strategy']
+        if 'max_amount' in params:
+            stock.max_amount = params['max_amount']
+        if 'buy_price' in params:
+            stock.buy_price = params['buy_price']
+        if 'sell_price' in params:
+            stock.sell_price = params['sell_price']
         if 'enabled' in params:
-            engine.config.update_stock_enabled(code, params['enabled'])
+            stock.enabled = params['enabled']
         if 'priority' in params:
-            engine.config.update_stock_priority(code, params['priority'])
+            stock.priority = params['priority']
+
+        # VB 전략 파라미터
+        if stock.strategy == 'volatility_breakout':
+            if not stock.vb_params:
+                from ..engine.config_parser import VBParams
+                stock.vb_params = VBParams()
+            if 'k' in params:
+                stock.vb_params.k = params['k']
+            if 'target_profit_rate' in params:
+                stock.vb_params.target_profit_rate = params['target_profit_rate']
+            if 'stop_loss_rate' in params:
+                stock.vb_params.stop_loss_rate = params['stop_loss_rate']
 
         engine.config.save_to_file(self._config_path)
         return {'success': True, 'message': f'Stock {code} updated'}

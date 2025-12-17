@@ -5,6 +5,7 @@ function Config() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingStock, setEditingStock] = useState(null);
   const [newStock, setNewStock] = useState({
     code: '',
     name: '',
@@ -70,6 +71,27 @@ function Config() {
         stop_loss_rate: -2.0,
         enabled: true,
       });
+      loadStocks();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleEdit = (stock) => {
+    setEditingStock({
+      ...stock,
+      k: stock.vb_params?.k || 0.5,
+      target_profit_rate: stock.vb_params?.target_profit_rate || 2.0,
+      stop_loss_rate: stock.vb_params?.stop_loss_rate || -2.0,
+    });
+    setShowAddForm(false);
+  };
+
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    try {
+      await window.electronAPI.stocks.update(editingStock.code, editingStock);
+      setEditingStock(null);
       loadStocks();
     } catch (err) {
       setError(err.message);
@@ -194,6 +216,101 @@ function Config() {
         </div>
       )}
 
+      {/* 종목 수정 폼 */}
+      {editingStock && (
+        <div className="card">
+          <h2>종목 수정: {editingStock.name} ({editingStock.code})</h2>
+          <form onSubmit={handleUpdate}>
+            <div className="form-row">
+              <div className="form-group">
+                <label>종목명</label>
+                <input
+                  type="text"
+                  value={editingStock.name}
+                  onChange={(e) => setEditingStock({ ...editingStock, name: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label>전략</label>
+                <select
+                  value={editingStock.strategy}
+                  onChange={(e) => setEditingStock({ ...editingStock, strategy: e.target.value })}
+                >
+                  <option value="range_trading">범위 매매</option>
+                  <option value="volatility_breakout">변동성 돌파</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>최대 투자금액</label>
+                <input
+                  type="number"
+                  value={editingStock.max_amount}
+                  onChange={(e) => setEditingStock({ ...editingStock, max_amount: parseInt(e.target.value) })}
+                />
+              </div>
+            </div>
+
+            {editingStock.strategy === 'range_trading' && (
+              <div className="form-row">
+                <div className="form-group">
+                  <label>매수가</label>
+                  <input
+                    type="number"
+                    value={editingStock.buy_price}
+                    onChange={(e) => setEditingStock({ ...editingStock, buy_price: parseInt(e.target.value) })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>매도가</label>
+                  <input
+                    type="number"
+                    value={editingStock.sell_price}
+                    onChange={(e) => setEditingStock({ ...editingStock, sell_price: parseInt(e.target.value) })}
+                  />
+                </div>
+              </div>
+            )}
+
+            {editingStock.strategy === 'volatility_breakout' && (
+              <div className="form-row">
+                <div className="form-group">
+                  <label>K값</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={editingStock.k}
+                    onChange={(e) => setEditingStock({ ...editingStock, k: parseFloat(e.target.value) })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>목표 수익률 (%)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={editingStock.target_profit_rate}
+                    onChange={(e) => setEditingStock({ ...editingStock, target_profit_rate: parseFloat(e.target.value) })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>손절 수익률 (%)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={editingStock.stop_loss_rate}
+                    onChange={(e) => setEditingStock({ ...editingStock, stop_loss_rate: parseFloat(e.target.value) })}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button type="submit" className="btn btn-primary">저장</button>
+              <button type="button" className="btn btn-secondary" onClick={() => setEditingStock(null)}>취소</button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {/* 종목 목록 */}
       <div className="card">
         <h2>등록된 종목</h2>
@@ -214,14 +331,30 @@ function Config() {
               {stocks.map((stock) => (
                 <tr key={stock.code}>
                   <td>
-                    <label className="toggle">
-                      <input
-                        type="checkbox"
-                        checked={stock.enabled}
-                        onChange={() => handleToggle(stock.code)}
-                      />
-                      <span className="toggle-slider"></span>
-                    </label>
+                    <div
+                      onClick={() => handleToggle(stock.code)}
+                      style={{
+                        width: '44px',
+                        height: '24px',
+                        backgroundColor: stock.enabled ? '#10b981' : '#d1d5db',
+                        borderRadius: '12px',
+                        cursor: 'pointer',
+                        position: 'relative',
+                        transition: 'background-color 0.2s'
+                      }}
+                    >
+                      <div style={{
+                        width: '20px',
+                        height: '20px',
+                        backgroundColor: '#fff',
+                        borderRadius: '50%',
+                        position: 'absolute',
+                        top: '2px',
+                        left: stock.enabled ? '22px' : '2px',
+                        transition: 'left 0.2s',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+                      }}></div>
+                    </div>
                   </td>
                   <td>{stock.code}</td>
                   <td>{stock.name}</td>
@@ -234,13 +367,22 @@ function Config() {
                   </td>
                   <td>{stock.max_amount?.toLocaleString()}원</td>
                   <td>
-                    <button
-                      className="btn btn-danger"
-                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
-                      onClick={() => handleDelete(stock.code)}
-                    >
-                      삭제
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.25rem' }}>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                        onClick={() => handleEdit(stock)}
+                      >
+                        수정
+                      </button>
+                      <button
+                        className="btn btn-danger"
+                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                        onClick={() => handleDelete(stock.code)}
+                      >
+                        삭제
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

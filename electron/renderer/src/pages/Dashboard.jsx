@@ -2,19 +2,24 @@ import React, { useState, useEffect } from 'react';
 
 function Dashboard() {
   const [status, setStatus] = useState(null);
+  const [stocks, setStocks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    loadStatus();
-    const interval = setInterval(loadStatus, 5000);
+    loadData();
+    const interval = setInterval(loadData, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  const loadStatus = async () => {
+  const loadData = async () => {
     try {
-      const result = await window.electronAPI.engine.getStatus();
-      setStatus(result);
+      const [statusResult, stocksResult] = await Promise.all([
+        window.electronAPI.engine.getStatus(),
+        window.electronAPI.stocks.list()
+      ]);
+      setStatus(statusResult);
+      setStocks(stocksResult?.stocks || []);
       setError(null);
     } catch (err) {
       setError(err.message);
@@ -26,7 +31,7 @@ function Dashboard() {
   const handleStart = async () => {
     try {
       await window.electronAPI.engine.start();
-      loadStatus();
+      loadData();
     } catch (err) {
       setError(err.message);
     }
@@ -35,7 +40,7 @@ function Dashboard() {
   const handleStop = async () => {
     try {
       await window.electronAPI.engine.stop();
-      loadStatus();
+      loadData();
     } catch (err) {
       setError(err.message);
     }
@@ -44,7 +49,7 @@ function Dashboard() {
   const handlePause = async () => {
     try {
       await window.electronAPI.engine.pause();
-      loadStatus();
+      loadData();
     } catch (err) {
       setError(err.message);
     }
@@ -53,7 +58,7 @@ function Dashboard() {
   const handleResume = async () => {
     try {
       await window.electronAPI.engine.resume();
-      loadStatus();
+      loadData();
     } catch (err) {
       setError(err.message);
     }
@@ -118,13 +123,46 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* 종목 요약 */}
+      {/* 종목 현황 */}
       <div className="card">
         <h2>종목 현황</h2>
-        <p style={{ color: 'var(--text-muted)' }}>
+        <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
           총 {totalStocks}개 종목 중 {enabledStocks}개 활성화됨
           {totalStocks === 0 && ' - 설정 페이지에서 종목을 추가하세요.'}
         </p>
+        {stocks.length > 0 && (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>상태</th>
+                <th>종목코드</th>
+                <th>종목명</th>
+                <th>전략</th>
+                <th>매수가/매도가</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stocks.map((stock) => (
+                <tr key={stock.code}>
+                  <td>
+                    <span className={`status-badge ${stock.enabled ? 'status-running' : 'status-stopped'}`}>
+                      {stock.enabled ? '활성' : '비활성'}
+                    </span>
+                  </td>
+                  <td>{stock.code}</td>
+                  <td>{stock.name}</td>
+                  <td>{stock.strategy === 'range_trading' ? '범위 매매' : '변동성 돌파'}</td>
+                  <td>
+                    {stock.strategy === 'range_trading'
+                      ? `${stock.buy_price?.toLocaleString()} / ${stock.sell_price?.toLocaleString()}`
+                      : `K=${stock.vb_params?.k || 0.5}`
+                    }
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* 최근 거래 */}

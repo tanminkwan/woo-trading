@@ -171,6 +171,17 @@ function Backtest() {
       {/* 설정 폼 */}
       <div className="card">
         <h2>백테스트 설정</h2>
+        <div style={{
+          backgroundColor: '#fef3c7',
+          border: '1px solid #f59e0b',
+          borderRadius: '0.375rem',
+          padding: '0.75rem 1rem',
+          marginBottom: '1rem',
+          fontSize: '0.875rem',
+          color: '#92400e'
+        }}>
+          <strong>참고:</strong> 실제 API는 당일 분봉 데이터만 제공합니다. 과거 데이터 백테스트 시 "일봉"을 사용하거나, 분봉 시뮬레이션은 "Mock 데이터"를 선택하세요.
+        </div>
         <form onSubmit={handleSubmit}>
           <div className="form-row">
             <div className="form-group">

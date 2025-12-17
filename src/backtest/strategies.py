@@ -21,11 +21,12 @@ class RangeTradingStrategy(IBacktestStrategy):
         position: int,
         params: dict,
     ) -> bool:
-        """매수 조건: 현재가가 buy_price 이하이고 미보유 상태"""
+        """매수 조건: 당일 저가가 buy_price 이하이고 미보유 상태"""
         buy_price = params.get("buy_price", 0)
         if position > 0 or buy_price <= 0:
             return False
-        return current_price <= buy_price
+        # 일봉: 저가가 매수가 이하면 매수 가능
+        return daily_data.low_price <= buy_price
 
     def should_sell(
         self,
@@ -35,11 +36,12 @@ class RangeTradingStrategy(IBacktestStrategy):
         position: int,
         params: dict,
     ) -> bool:
-        """매도 조건: 현재가가 sell_price 이상이고 보유 중"""
+        """매도 조건: 당일 고가가 sell_price 이상이고 보유 중"""
         sell_price = params.get("sell_price", 0)
         if position <= 0 or sell_price <= 0:
             return False
-        return current_price >= sell_price
+        # 일봉: 고가가 매도가 이상이면 매도 가능
+        return daily_data.high_price >= sell_price
 
     def get_buy_price(
         self,

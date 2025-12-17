@@ -38,6 +38,11 @@ class PythonBridge {
       this.process = spawn(pythonPath, args, {
         stdio: ['pipe', 'pipe', 'pipe'],
         cwd: path.join(__dirname, '../..'),
+        env: {
+          ...process.env,
+          PYTHONIOENCODING: 'utf-8',
+          PYTHONUTF8: '1',
+        },
       });
 
       // stdout에서 JSON-RPC 응답 읽기
