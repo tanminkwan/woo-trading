@@ -505,20 +505,23 @@ flowchart TD
     Auth -->|No| AuthFail[인증 실패]
     Auth -->|Yes| Loop[메인 루프 시작]
 
-    Loop --> CheckDay{날짜 변경?}
-    CheckDay -->|Yes| ResetCount[일일 거래 횟수 초기화]
-    ResetCount --> GetStocks
-    CheckDay -->|No| GetStocks[활성 종목 조회]
+    Loop --> CheckStatus{상태 == RUNNING?}
+    CheckStatus -->|No| Sleep1[1초 대기]
+    Sleep1 --> Loop
+    CheckStatus -->|Yes| CheckDay{날짜 변경?}
 
-    GetStocks --> SortPriority[우선순위 정렬]
-    SortPriority --> ForEach{각 종목 처리}
+    CheckDay -->|Yes| ResetCount[일일 거래 횟수 초기화<br/>VB 캐시 초기화]
+    ResetCount --> GetStocks
+    CheckDay -->|No| GetStocks[활성 종목 조회<br/>우선순위순 정렬됨]
+
+    GetStocks --> ForEach{각 종목 처리}
 
     ForEach --> CheckInterval{모니터링 주기 도래?}
-    CheckInterval -->|No| ForEach
+    CheckInterval -->|No| NextStock
     CheckInterval -->|Yes| CheckStrategy{전략 확인}
 
-    CheckStrategy -->|Range| RangeProcess[범위 매매 처리]
-    CheckStrategy -->|VB| VBProcess[변동성 돌파 처리]
+    CheckStrategy -->|range_trading| RangeProcess[범위 매매 처리]
+    CheckStrategy -->|volatility_breakout| VBProcess[변동성 돌파 처리]
 
     RangeProcess --> NextStock
     VBProcess --> NextStock
@@ -535,23 +538,25 @@ flowchart TD
 ```mermaid
 flowchart TD
     Start([범위 매매 시작]) --> GetPrice[현재가 조회]
-    GetPrice --> GetBalance[보유 수량 조회]
-    GetBalance --> UpdateStatus[상태 업데이트]
+    GetPrice --> GetBalance[계좌 잔고 조회]
+    GetBalance --> UpdateStatus[종목 상태 업데이트<br/>현재가, 보유수량, 평균단가]
 
-    UpdateStatus --> CheckLimit{일일 거래 제한?}
+    UpdateStatus --> CheckLimit{일일 거래 제한<br/>초과?}
     CheckLimit -->|Yes| End([종료])
     CheckLimit -->|No| CheckHolding{보유 중?}
 
-    CheckHolding -->|Yes| CheckSell{현재가 >= 매도가?}
-    CheckSell -->|Yes| ExecuteSell[매도 주문]
+    CheckHolding -->|Yes| CheckSell{현재가 >= sell_price?}
+    CheckSell -->|Yes| ExecuteSell[매도 주문<br/>보유 전량]
     CheckSell -->|No| End
 
-    CheckHolding -->|No| CheckBuy{현재가 <= 매수가?}
-    CheckBuy -->|Yes| CalcQty[매수 수량 계산]
-    CalcQty --> ExecuteBuy[매수 주문]
+    CheckHolding -->|No| CheckBuy{현재가 <= buy_price?}
+    CheckBuy -->|Yes| CalcQty[매수 가능 수량 계산<br/>min: max_amount/가격, 예수금/가격]
+    CalcQty --> CheckQty{수량 > 0?}
+    CheckQty -->|No| End
+    CheckQty -->|Yes| ExecuteBuy[매수 주문]
     CheckBuy -->|No| End
 
-    ExecuteSell --> LogTrade[거래 로그 기록]
+    ExecuteSell --> LogTrade[거래 로그 기록<br/>일일 거래 횟수 증가]
     ExecuteBuy --> LogTrade
     LogTrade --> End
 ```
@@ -562,11 +567,11 @@ flowchart TD
 flowchart TD
     Start([변동성 돌파 시작]) --> CheckTime{장 운영시간?<br/>09:00~15:20}
     CheckTime -->|No| End([종료])
-    CheckTime -->|Yes| LoadData{일별 데이터 로드됨?}
+    CheckTime -->|Yes| CheckCache{VB 데이터 캐시됨?}
 
-    LoadData -->|No| FetchDaily[전일 고가/저가 조회]
+    CheckCache -->|No| FetchDaily[전일 고가/저가/당일 시가 조회]
     FetchDaily --> CalcTarget
-    LoadData -->|Yes| CalcTarget[목표가 계산<br/>시가 + Range × K]
+    CheckCache -->|Yes| CalcTarget[목표가 계산<br/>시가 + 전일Range × K]
 
     CalcTarget --> GetPrice[현재가 조회]
     GetPrice --> GetBalance[보유 수량 조회]
@@ -577,13 +582,15 @@ flowchart TD
     CheckLimit -->|No| CheckHolding{보유 중?}
 
     CheckHolding -->|Yes| CalcProfit[수익률 계산]
-    CalcProfit --> CheckTarget{수익률 >= 목표?}
-    CheckTarget -->|Yes| ExecuteSell[매도 - 목표 달성]
-    CheckTarget -->|No| CheckStop{수익률 <= 손절?}
+    CalcProfit --> CheckTarget{수익률 >= target_profit_rate?}
+    CheckTarget -->|Yes| ExecuteSell[매도 - 익절]
+    CheckTarget -->|No| CheckStop{수익률 <= stop_loss_rate?}
     CheckStop -->|Yes| ExecuteStopLoss[매도 - 손절]
-    CheckStop -->|No| CheckClose{15:15 이후?}
-    CheckClose -->|Yes| ExecuteClose[매도 - 장마감]
-    CheckClose -->|No| End
+    CheckStop -->|No| CheckCloseOption{sell_at_close<br/>옵션 활성?}
+    CheckCloseOption -->|No| End
+    CheckCloseOption -->|Yes| CheckCloseTime{15:15 이후?}
+    CheckCloseTime -->|Yes| ExecuteClose[매도 - 장마감]
+    CheckCloseTime -->|No| End
 
     CheckHolding -->|No| CheckBought{당일 매수 완료?}
     CheckBought -->|Yes| End
@@ -607,7 +614,7 @@ flowchart LR
         Status[엔진 상태]
         Stats[거래 통계]
         StockList[종목 현황]
-        Realtime[실시간 갱신]
+        RecentTrades[최근 거래]
     end
 
     subgraph 설정
@@ -620,21 +627,29 @@ flowchart LR
 
     subgraph 거래로그
         ViewLogs[로그 조회]
-        FilterLogs[필터링]
     end
 
-    Status -->|시작/정지| Engine[Trading Engine]
+    subgraph 백테스트
+        SetParams[파라미터 설정]
+        SelectData[데이터 단위 선택<br/>일봉/분봉]
+        RunBacktest[백테스트 실행]
+        ViewChart[차트 & 결과 조회]
+    end
+
+    Status -->|시작/정지/일시정지| Engine[Trading Engine]
     StockList -->|토글| Engine
     AddStock -->|저장| YAML[(YAML 설정)]
     ManageStock -->|삭제| YAML
-    Engine -->|상태| Realtime
+    Engine -->|상태| Stats
     Engine -->|기록| ViewLogs
+    RunBacktest -->|Mock/실제 데이터| ViewChart
 ```
 
 ### IPC 메서드 (JSON-RPC)
 
 | 메서드 | 설명 |
 |--------|------|
+| `ping` | 헬스 체크 |
 | `engine.start` | 엔진 시작 |
 | `engine.stop` | 엔진 정지 |
 | `engine.pause` | 일시정지 |
@@ -649,6 +664,7 @@ flowchart LR
 | `backtest.run` | 백테스트 실행 |
 | `config.get` | 설정 조회 |
 | `config.save` | 설정 저장 |
+| `config.reload` | 설정 다시 로드 |
 
 ## 백테스트 (Backtest)
 
@@ -782,28 +798,42 @@ print(f"승률: {result.win_rate:.1f}%")
 
 ```mermaid
 flowchart TD
-    Start([백테스트 시작]) --> LoadData[과거 데이터 로드]
-    LoadData --> InitState[상태 초기화<br/>cash, position]
+    Start([백테스트 시작]) --> LoadDaily[일봉 데이터 로드]
+    LoadDaily --> CheckMode{분봉 모드?}
 
-    InitState --> ForEach{각 거래일 처리}
-    ForEach --> UpdateCapital[현재 자본 평가]
-    UpdateCapital --> CalcDrawdown[최대 낙폭 계산]
+    CheckMode -->|No| InitDaily[상태 초기화]
+    CheckMode -->|Yes| InitMinute[상태 초기화]
 
-    CalcDrawdown --> CheckPosition{보유 중?}
-    CheckPosition -->|No| CheckBuy{매수 조건?}
-    CheckBuy -->|Yes| ExecuteBuy[매수 실행]
-    CheckBuy -->|No| NextDay
+    subgraph DailyMode["일봉 시뮬레이션"]
+        InitDaily --> ForDay{각 거래일}
+        ForDay --> DayCapital[자본 평가 & 낙폭 계산]
+        DayCapital --> DayCheck{매수/매도 조건}
+        DayCheck -->|매수| DayBuy[매수 실행]
+        DayCheck -->|매도| DaySell[매도 실행]
+        DayCheck -->|없음| DayNext
+        DayBuy --> DayNext[다음 날]
+        DaySell --> DayNext
+        DayNext -->|있음| ForDay
+    end
 
-    CheckPosition -->|Yes| CheckSell{매도 조건?}
-    CheckSell -->|Yes| ExecuteSell[매도 실행]
-    CheckSell -->|No| NextDay
+    subgraph MinuteMode["분봉 시뮬레이션"]
+        InitMinute --> ForDayM{각 거래일}
+        ForDayM --> LoadMinute[해당일 분봉 로드]
+        LoadMinute --> ForMin{각 분봉}
+        ForMin --> MinCapital[자본 평가 & 낙폭 계산]
+        MinCapital --> MinCheck{매수/매도 조건}
+        MinCheck -->|매수| MinBuy[매수 실행]
+        MinCheck -->|매도| MinSell[매도 실행]
+        MinCheck -->|없음| MinNext
+        MinBuy --> MinNext[다음 분봉]
+        MinSell --> MinNext
+        MinNext -->|있음| ForMin
+        MinNext -->|없음| DayNextM[다음 날]
+        DayNextM -->|있음| ForDayM
+    end
 
-    ExecuteBuy --> RecordTrade[거래 기록]
-    ExecuteSell --> RecordTrade
-    RecordTrade --> NextDay{다음 거래일?}
-
-    NextDay -->|Yes| ForEach
-    NextDay -->|No| CalcResult[결과 계산<br/>수익률, 승률]
+    DayNext -->|없음| CalcResult[결과 계산<br/>수익률, 승률, 최대낙폭]
+    DayNextM -->|없음| CalcResult
     CalcResult --> End([결과 반환])
 ```
 
@@ -811,7 +841,7 @@ flowchart TD
 
 ### Authentication failed 에러
 
-웹 UI에서 `시작` 버튼 클릭 시 `Authentication failed` 에러가 발생하는 경우:
+데스크톱 앱에서 `시작` 버튼 클릭 시 `Authentication failed` 에러가 발생하는 경우:
 
 ```
 2025-12-16 14:55:24,457 [ERROR] Authentication failed
@@ -827,7 +857,7 @@ flowchart TD
    APP_KEY=new_app_key
    APP_SECRET=new_app_secret
    ```
-4. 웹 서버 재시작 후 다시 시도
+4. 앱 재시작 후 다시 시도
 
 ### 토큰 발급 제한 에러
 
