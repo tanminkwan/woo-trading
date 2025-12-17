@@ -54,7 +54,7 @@ def build_python_backend():
         "--hidden-import", "src.backtest.data_provider",
         "--hidden-import", "src.services",
         "--hidden-import", "yaml",
-        str(root_dir / "src" / "ipc" / "main.py"),
+        str(root_dir / "backend_entry.py"),
     ]
 
     run_command(cmd, cwd=str(root_dir))
