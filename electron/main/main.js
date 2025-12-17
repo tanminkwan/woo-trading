@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const PythonBridge = require('./python-bridge');
 
@@ -9,6 +9,24 @@ const useDevServer = process.env.NODE_ENV === 'development';
 
 let mainWindow = null;
 let pythonBridge = null;
+
+// ============ 중복 실행 방지 ============
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  // 이미 실행 중인 인스턴스가 있으면 종료
+  app.quit();
+} else {
+  // 두 번째 인스턴스 실행 시도 시 기존 창 활성화
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+      mainWindow.focus();
+    }
+  });
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -37,7 +55,9 @@ function createWindow() {
     mainWindow.show();
   });
 
-  mainWindow.on('closed', () => {
+  // 창 닫기 시 백엔드도 종료
+  mainWindow.on('closed', async () => {
+    await stopPythonBackend();
     mainWindow = null;
   });
 }
@@ -51,6 +71,20 @@ async function startPythonBackend() {
     console.log('Python backend started successfully');
   } catch (error) {
     console.error('Failed to start Python backend:', error);
+  }
+}
+
+// Python 백엔드 종료
+async function stopPythonBackend() {
+  if (pythonBridge) {
+    console.log('Stopping Python backend...');
+    try {
+      await pythonBridge.stop();
+      console.log('Python backend stopped');
+    } catch (error) {
+      console.error('Error stopping Python backend:', error);
+    }
+    pythonBridge = null;
   }
 }
 
@@ -73,33 +107,31 @@ function setupIpcHandlers() {
   });
 }
 
-// 앱 시작
-app.whenReady().then(async () => {
-  setupIpcHandlers();
-  await startPythonBackend();
-  createWindow();
+// 앱 시작 (중복 실행이 아닌 경우에만)
+if (gotTheLock) {
+  app.whenReady().then(async () => {
+    setupIpcHandlers();
+    await startPythonBackend();
+    createWindow();
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      }
+    });
+  });
+
+  // 모든 창이 닫히면 앱 종료
+  app.on('window-all-closed', async () => {
+    await stopPythonBackend();
+
+    if (process.platform !== 'darwin') {
+      app.quit();
     }
   });
-});
 
-// 모든 창이 닫히면 앱 종료
-app.on('window-all-closed', async () => {
-  if (pythonBridge) {
-    await pythonBridge.stop();
-  }
-
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
-
-// 앱 종료 전 정리
-app.on('before-quit', async () => {
-  if (pythonBridge) {
-    await pythonBridge.stop();
-  }
-});
+  // 앱 종료 전 정리
+  app.on('before-quit', async () => {
+    await stopPythonBackend();
+  });
+}

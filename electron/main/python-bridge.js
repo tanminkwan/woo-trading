@@ -83,16 +83,41 @@ class PythonBridge {
    * Python 백엔드 프로세스 종료
    */
   async stop() {
-    if (this.process) {
-      try {
-        await this.call('shutdown', {});
-      } catch (error) {
-        // 무시
-      }
-
-      this.process.kill();
-      this.process = null;
+    if (!this.process) {
+      return;
     }
+
+    const proc = this.process;
+
+    // 1. shutdown 명령으로 정상 종료 시도 (타임아웃 2초)
+    try {
+      const shutdownPromise = this.call('shutdown', {});
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Shutdown timeout')), 2000)
+      );
+      await Promise.race([shutdownPromise, timeoutPromise]);
+    } catch (error) {
+      console.log('Shutdown command failed or timed out, forcing kill...');
+    }
+
+    // 2. 프로세스가 아직 살아있으면 강제 종료
+    if (proc && !proc.killed) {
+      try {
+        proc.kill('SIGTERM');
+
+        // SIGTERM 후 1초 대기
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // 아직 살아있으면 SIGKILL
+        if (!proc.killed) {
+          proc.kill('SIGKILL');
+        }
+      } catch (error) {
+        // 이미 종료된 경우 무시
+      }
+    }
+
+    this.process = null;
 
     if (this.rl) {
       this.rl.close();
