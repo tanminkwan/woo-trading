@@ -1,6 +1,6 @@
 # 한국투자증권 OpenAPI 주식 자동매매 프로그램
 
-한국투자증권 OpenAPI를 활용한 Python 주식 자동매매 프로그램입니다.
+한국투자증권 OpenAPI를 활용한 Python 주식 자동매매 **데스크톱** 프로그램입니다.
 
 ## 기능
 
@@ -9,7 +9,7 @@
 - **주문**: 매수/매도 (시장가/지정가)
 - **주문 내역**: 당일 주문/체결 조회
 - **자동매매 엔진**: YAML 설정 기반 자동 매매
-- **웹 관리 화면**: 종목 등록/관리, 엔진 제어, 거래 로그
+- **데스크톱 관리 앱**: Electron 기반 GUI (종목 관리, 엔진 제어, 거래 로그)
 - **백테스트**: 과거 데이터 기반 전략 시뮬레이션 (일봉/분봉)
 
 ## 설치
@@ -19,8 +19,13 @@
 git clone https://github.com/your-repo/auto-stock.git
 cd auto-stock
 
-# 의존성 설치
+# Python 의존성 설치
 pip install -r requirements.txt
+
+# Electron 앱 의존성 설치
+cd electron && npm install
+cd renderer && npm install
+cd ../..
 ```
 
 ## 설정
@@ -142,14 +147,34 @@ client = KISClient(config)
 auto-stock/
 ├── .env                          # 환경변수
 ├── main.py                       # CLI 인터페이스
-├── run_web.py                    # 웹 서버 실행
+├── build.py                      # 전체 빌드 스크립트
 ├── requirements.txt
 │
 ├── config/
 │   └── trading_config.yaml       # 자동매매 설정
 │
+├── electron/                     # Electron 데스크톱 앱
+│   ├── package.json              # Electron 설정
+│   ├── main/
+│   │   ├── main.js               # 메인 프로세스
+│   │   ├── preload.js            # IPC 브릿지
+│   │   └── python-bridge.js      # Python 통신
+│   └── renderer/                 # React UI
+│       ├── package.json
+│       └── src/
+│           ├── App.jsx
+│           └── pages/
+│               ├── Dashboard.jsx # 대시보드
+│               ├── Config.jsx    # 설정
+│               ├── Logs.jsx      # 거래 로그
+│               └── Backtest.jsx  # 백테스트
+│
 ├── src/
 │   ├── factory.py                # 의존성 주입 팩토리
+│   │
+│   ├── ipc/                      # IPC 핸들러
+│   │   ├── main.py               # JSON-RPC 서버
+│   │   └── handler.py            # RPC 핸들러
 │   │
 │   ├── domain/                   # 도메인 계층
 │   │   ├── models.py             # 데이터 모델
@@ -169,26 +194,17 @@ auto-stock/
 │   │   ├── config_parser.py      # 설정 파서
 │   │   └── trading_engine.py     # 트레이딩 엔진
 │   │
-│   ├── backtest/                 # 백테스트 모듈
-│   │   ├── models.py             # 결과 모델
-│   │   ├── strategies.py         # 전략 시뮬레이터
-│   │   ├── data_provider.py      # 데이터 제공자
-│   │   └── engine.py             # 백테스트 엔진
-│   │
-│   └── web/                      # 웹 UI
-│       ├── app.py                # FastAPI 앱
-│       └── templates/            # HTML 템플릿
+│   └── backtest/                 # 백테스트 모듈
+│       ├── models.py             # 결과 모델
+│       ├── strategies.py         # 전략 시뮬레이터
+│       ├── data_provider.py      # 데이터 제공자
+│       └── engine.py             # 백테스트 엔진
 │
 └── tests/                        # 테스트 (121개)
     ├── conftest.py
     ├── test_models.py
     ├── test_config.py
-    ├── test_config_parser.py
-    ├── test_stock_service.py
-    ├── test_account_service.py
-    ├── test_order_service.py
-    ├── test_trading_engine.py
-    └── test_backtest.py
+    └── ...
 ```
 
 ## 아키텍처
@@ -283,21 +299,34 @@ python -m pytest tests/ -v --cov=src --cov-report=term-missing
 
 ## 자동매매 엔진
 
-### 웹 서버 실행
+### 데스크톱 앱 실행
 
 ```bash
-python run_web.py
+# 개발 모드 실행
+cd electron && npx electron .
+
+# 또는 React 개발 서버와 함께 실행
+cd electron && npm run dev
 ```
 
-브라우저에서 http://localhost:8000 접속
+### 배포용 빌드
 
-### 웹 화면 기능
+```bash
+# 전체 빌드 (Python + Electron)
+python build.py
+
+# Windows 설치 파일 생성
+cd electron && npm run dist:win
+```
+
+### 데스크톱 앱 화면
 
 | 페이지 | 기능 |
 |--------|------|
 | **대시보드** | 엔진 상태, 종목 현황, 실시간 모니터링 |
 | **설정** | 종목 추가/삭제, 활성화 토글 |
 | **거래로그** | 매수/매도 기록 조회 |
+| **백테스트** | 전략 시뮬레이션, 차트 분석 |
 
 ### YAML 설정 파일
 
@@ -422,34 +451,33 @@ stocks:
 
 ```mermaid
 flowchart TB
-    subgraph UI["🖥️ Web UI"]
-        Dashboard[대시보드]
-        Config[설정 페이지]
-        Logs[거래 로그]
+    subgraph Electron["🖥️ Electron Desktop App"]
+        subgraph Renderer["React UI"]
+            Dashboard[대시보드]
+            ConfigPage[설정 페이지]
+            LogsPage[거래 로그]
+            BacktestPage[백테스트]
+        end
+        subgraph Main["Main Process"]
+            IPC[IPC Handler]
+            PythonBridge[Python Bridge]
+        end
     end
 
-    subgraph API["🔌 FastAPI"]
-        EngineAPI[엔진 제어 API]
-        StockAPI[종목 관리 API]
-        LogAPI[로그 조회 API]
-    end
-
-    subgraph Engine["⚙️ Trading Engine"]
-        Loop[메인 루프]
-        RangeStrategy[범위 매매]
-        VBStrategy[변동성 돌파]
-    end
-
-    subgraph Services["📦 Application Services"]
-        StockSvc[StockService]
-        AccountSvc[AccountService]
-        OrderSvc[OrderService]
-    end
-
-    subgraph Infra["🔧 Infrastructure"]
-        Auth[인증 관리]
-        HTTP[HTTP Client]
-        ConfigMgr[설정 관리]
+    subgraph Python["🐍 Python Backend"]
+        subgraph JSONRPC["JSON-RPC Server"]
+            RpcHandler[RPC Handler]
+        end
+        subgraph Engine["Trading Engine"]
+            Loop[메인 루프]
+            RangeStrategy[범위 매매]
+            VBStrategy[변동성 돌파]
+        end
+        subgraph Services["Application Services"]
+            StockSvc[StockService]
+            AccountSvc[AccountService]
+            OrderSvc[OrderService]
+        end
     end
 
     subgraph External["🌐 External"]
@@ -457,31 +485,22 @@ flowchart TB
         YAML[YAML 설정 파일]
     end
 
-    Dashboard --> EngineAPI
-    Config --> StockAPI
-    Logs --> LogAPI
+    Dashboard --> IPC
+    ConfigPage --> IPC
+    LogsPage --> IPC
+    BacktestPage --> IPC
 
-    EngineAPI --> Engine
-    StockAPI --> Engine
-    LogAPI --> Engine
+    IPC --> PythonBridge
+    PythonBridge -->|stdin/stdout| RpcHandler
+
+    RpcHandler --> Engine
+    RpcHandler --> Services
 
     Loop --> RangeStrategy
     Loop --> VBStrategy
 
-    RangeStrategy --> StockSvc
-    RangeStrategy --> AccountSvc
-    RangeStrategy --> OrderSvc
-    VBStrategy --> StockSvc
-    VBStrategy --> AccountSvc
-    VBStrategy --> OrderSvc
-
-    StockSvc --> Auth
-    AccountSvc --> Auth
-    OrderSvc --> Auth
-
-    Auth --> HTTP
-    HTTP --> KIS
-    ConfigMgr --> YAML
+    Services --> KIS
+    Engine --> YAML
 ```
 
 ### 자동매매 엔진 흐름
@@ -586,7 +605,7 @@ flowchart TD
     LogTrade --> End
 ```
 
-### Web UI 흐름
+### Desktop UI 흐름
 
 ```mermaid
 flowchart LR
@@ -618,21 +637,24 @@ flowchart LR
     Engine -->|기록| ViewLogs
 ```
 
-### API 엔드포인트
+### IPC 메서드 (JSON-RPC)
 
-| 엔드포인트 | 메서드 | 설명 |
-|------------|--------|------|
-| `/api/engine/start` | POST | 엔진 시작 |
-| `/api/engine/stop` | POST | 엔진 정지 |
-| `/api/engine/pause` | POST | 일시정지 |
-| `/api/engine/resume` | POST | 재개 |
-| `/api/engine/status` | GET | 상태 조회 |
-| `/api/stocks` | GET | 종목 목록 |
-| `/api/stocks` | POST | 종목 추가 |
-| `/api/stocks/{code}/toggle` | POST | 활성화 토글 |
-| `/api/stocks/{code}/delete` | POST | 종목 삭제 |
-| `/api/logs` | GET | 거래 로그 |
-| `/api/backtest/run` | POST | 백테스트 실행 |
+| 메서드 | 설명 |
+|--------|------|
+| `engine.start` | 엔진 시작 |
+| `engine.stop` | 엔진 정지 |
+| `engine.pause` | 일시정지 |
+| `engine.resume` | 재개 |
+| `engine.status` | 상태 조회 |
+| `stocks.list` | 종목 목록 |
+| `stocks.add` | 종목 추가 |
+| `stocks.update` | 종목 수정 |
+| `stocks.delete` | 종목 삭제 |
+| `stocks.toggle` | 활성화 토글 |
+| `logs.get` | 거래 로그 |
+| `backtest.run` | 백테스트 실행 |
+| `config.get` | 설정 조회 |
+| `config.save` | 설정 저장 |
 
 ## 백테스트 (Backtest)
 
@@ -672,11 +694,11 @@ python main.py backtest 005930 20241101 20241130 \
 python main.py backtest 005930 20241101 20241130 --mock -s volatility_breakout
 ```
 
-### 웹 UI 백테스트
+### 데스크톱 앱 백테스트
 
-웹 UI에서도 백테스트를 실행할 수 있습니다:
+데스크톱 앱에서 백테스트를 실행할 수 있습니다:
 
-1. http://localhost:8000/backtest 접속
+1. 앱 실행 후 "백테스트" 메뉴 클릭
 2. 종목코드, 기간, 자본금 입력
 3. 전략 선택 (범위 매매 / 변동성 돌파)
 4. 데이터 단위 선택 (일봉 / 분봉)
