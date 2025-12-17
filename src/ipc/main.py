@@ -7,6 +7,12 @@ import json
 import logging
 from typing import Any, Dict, Optional
 
+# Windows에서 UTF-8 인코딩 강제 설정
+if sys.platform == 'win32':
+    sys.stdin.reconfigure(encoding='utf-8')
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+
 from .handler import RpcHandler
 
 # 로깅 설정 (stderr로 출력)
