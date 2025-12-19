@@ -1,6 +1,6 @@
 # 한국투자증권 OpenAPI 주식 자동매매 프로그램
 
-한국투자증권 OpenAPI를 활용한 Python 주식 자동매매 프로그램입니다.
+한국투자증권 OpenAPI를 활용한 Python 주식 자동매매 **데스크톱** 프로그램입니다.
 
 ## 기능
 
@@ -9,42 +9,54 @@
 - **주문**: 매수/매도 (시장가/지정가)
 - **주문 내역**: 당일 주문/체결 조회
 - **자동매매 엔진**: YAML 설정 기반 자동 매매
-- **웹 관리 화면**: 종목 등록/관리, 엔진 제어, 거래 로그
+- **데스크톱 관리 앱**: Electron 기반 GUI (종목 관리, 엔진 제어, 거래 로그)
 - **백테스트**: 과거 데이터 기반 전략 시뮬레이션 (일봉/분봉)
 
-## 설치
+## 문서
+
+| 문서 | 내용 |
+|------|------|
+| [설치 가이드](docs/INSTALL.md) | 배포된 앱 설치 및 설정 방법 |
+| [빌드 가이드](docs/BUILD.md) | 소스 코드에서 빌드하는 방법 |
+
+## 빠른 시작
+
+### 배포된 앱 사용 (일반 사용자)
+
+1. `AutoStock Setup x.x.x.exe` 다운로드 및 설치
+2. 설치 후 `resources/config/.env` 파일 생성
+3. API Key 및 계좌번호 설정
+4. 앱 실행
+
+자세한 내용: [설치 가이드](docs/INSTALL.md)
+
+### 소스에서 빌드 (개발자)
 
 ```bash
-# 저장소 클론
-git clone https://github.com/your-repo/auto-stock.git
-cd auto-stock
-
 # 의존성 설치
 pip install -r requirements.txt
+cd electron && npm install && cd renderer && npm install && cd ../..
+
+# 전체 빌드
+python build.py
 ```
+
+자세한 내용: [빌드 가이드](docs/BUILD.md)
 
 ## 설정
 
-### 1. 한국투자증권 API 발급
-
-1. [KIS Developers](https://apiportal.koreainvestment.com/) 가입
-2. API 신청 → APP KEY, APP SECRET 발급
-
-### 2. 환경변수 설정
-
-`.env` 파일 생성:
+### 환경변수 (.env)
 
 ```env
-# API 인증 정보
 APP_KEY=your_app_key
 APP_SECRET=your_app_secret
-
-# 계좌번호 (XXXXXXXX-XX 형식)
 ACCOUNT_NO=12345678-01
-
-# 환경 설정 (prod: 실전투자, dev: 모의투자)
-ENV=dev
+ENV=dev  # dev: 모의투자, prod: 실전투자
 ```
+
+**파일 위치**:
+- 개발: 프로젝트 루트 `.env`
+- 설치 앱: `resources/config/.env`
 
 ## 사용법
 
@@ -142,14 +154,34 @@ client = KISClient(config)
 auto-stock/
 ├── .env                          # 환경변수
 ├── main.py                       # CLI 인터페이스
-├── run_web.py                    # 웹 서버 실행
+├── build.py                      # 전체 빌드 스크립트
 ├── requirements.txt
 │
 ├── config/
 │   └── trading_config.yaml       # 자동매매 설정
 │
+├── electron/                     # Electron 데스크톱 앱
+│   ├── package.json              # Electron 설정
+│   ├── main/
+│   │   ├── main.js               # 메인 프로세스
+│   │   ├── preload.js            # IPC 브릿지
+│   │   └── python-bridge.js      # Python 통신
+│   └── renderer/                 # React UI
+│       ├── package.json
+│       └── src/
+│           ├── App.jsx
+│           └── pages/
+│               ├── Dashboard.jsx # 대시보드
+│               ├── Config.jsx    # 설정
+│               ├── Logs.jsx      # 거래 로그
+│               └── Backtest.jsx  # 백테스트
+│
 ├── src/
 │   ├── factory.py                # 의존성 주입 팩토리
+│   │
+│   ├── ipc/                      # IPC 핸들러
+│   │   ├── main.py               # JSON-RPC 서버
+│   │   └── handler.py            # RPC 핸들러
 │   │
 │   ├── domain/                   # 도메인 계층
 │   │   ├── models.py             # 데이터 모델
@@ -169,26 +201,17 @@ auto-stock/
 │   │   ├── config_parser.py      # 설정 파서
 │   │   └── trading_engine.py     # 트레이딩 엔진
 │   │
-│   ├── backtest/                 # 백테스트 모듈
-│   │   ├── models.py             # 결과 모델
-│   │   ├── strategies.py         # 전략 시뮬레이터
-│   │   ├── data_provider.py      # 데이터 제공자
-│   │   └── engine.py             # 백테스트 엔진
-│   │
-│   └── web/                      # 웹 UI
-│       ├── app.py                # FastAPI 앱
-│       └── templates/            # HTML 템플릿
+│   └── backtest/                 # 백테스트 모듈
+│       ├── models.py             # 결과 모델
+│       ├── strategies.py         # 전략 시뮬레이터
+│       ├── data_provider.py      # 데이터 제공자
+│       └── engine.py             # 백테스트 엔진
 │
 └── tests/                        # 테스트 (121개)
     ├── conftest.py
     ├── test_models.py
     ├── test_config.py
-    ├── test_config_parser.py
-    ├── test_stock_service.py
-    ├── test_account_service.py
-    ├── test_order_service.py
-    ├── test_trading_engine.py
-    └── test_backtest.py
+    └── ...
 ```
 
 ## 아키텍처
@@ -283,21 +306,21 @@ python -m pytest tests/ -v --cov=src --cov-report=term-missing
 
 ## 자동매매 엔진
 
-### 웹 서버 실행
+### 데스크톱 앱 실행
 
 ```bash
-python run_web.py
+# 개발 모드 실행
+cd electron && npm run dev
 ```
 
-브라우저에서 http://localhost:8000 접속
-
-### 웹 화면 기능
+### 데스크톱 앱 화면
 
 | 페이지 | 기능 |
 |--------|------|
 | **대시보드** | 엔진 상태, 종목 현황, 실시간 모니터링 |
 | **설정** | 종목 추가/삭제, 활성화 토글 |
 | **거래로그** | 매수/매도 기록 조회 |
+| **백테스트** | 전략 시뮬레이션, 차트 분석 |
 
 ### YAML 설정 파일
 
@@ -422,34 +445,33 @@ stocks:
 
 ```mermaid
 flowchart TB
-    subgraph UI["🖥️ Web UI"]
-        Dashboard[대시보드]
-        Config[설정 페이지]
-        Logs[거래 로그]
+    subgraph Electron["🖥️ Electron Desktop App"]
+        subgraph Renderer["React UI"]
+            Dashboard[대시보드]
+            ConfigPage[설정 페이지]
+            LogsPage[거래 로그]
+            BacktestPage[백테스트]
+        end
+        subgraph Main["Main Process"]
+            IPC[IPC Handler]
+            PythonBridge[Python Bridge]
+        end
     end
 
-    subgraph API["🔌 FastAPI"]
-        EngineAPI[엔진 제어 API]
-        StockAPI[종목 관리 API]
-        LogAPI[로그 조회 API]
-    end
-
-    subgraph Engine["⚙️ Trading Engine"]
-        Loop[메인 루프]
-        RangeStrategy[범위 매매]
-        VBStrategy[변동성 돌파]
-    end
-
-    subgraph Services["📦 Application Services"]
-        StockSvc[StockService]
-        AccountSvc[AccountService]
-        OrderSvc[OrderService]
-    end
-
-    subgraph Infra["🔧 Infrastructure"]
-        Auth[인증 관리]
-        HTTP[HTTP Client]
-        ConfigMgr[설정 관리]
+    subgraph Python["🐍 Python Backend"]
+        subgraph JSONRPC["JSON-RPC Server"]
+            RpcHandler[RPC Handler]
+        end
+        subgraph Engine["Trading Engine"]
+            Loop[메인 루프]
+            RangeStrategy[범위 매매]
+            VBStrategy[변동성 돌파]
+        end
+        subgraph Services["Application Services"]
+            StockSvc[StockService]
+            AccountSvc[AccountService]
+            OrderSvc[OrderService]
+        end
     end
 
     subgraph External["🌐 External"]
@@ -457,31 +479,22 @@ flowchart TB
         YAML[YAML 설정 파일]
     end
 
-    Dashboard --> EngineAPI
-    Config --> StockAPI
-    Logs --> LogAPI
+    Dashboard --> IPC
+    ConfigPage --> IPC
+    LogsPage --> IPC
+    BacktestPage --> IPC
 
-    EngineAPI --> Engine
-    StockAPI --> Engine
-    LogAPI --> Engine
+    IPC --> PythonBridge
+    PythonBridge -->|stdin/stdout| RpcHandler
+
+    RpcHandler --> Engine
+    RpcHandler --> Services
 
     Loop --> RangeStrategy
     Loop --> VBStrategy
 
-    RangeStrategy --> StockSvc
-    RangeStrategy --> AccountSvc
-    RangeStrategy --> OrderSvc
-    VBStrategy --> StockSvc
-    VBStrategy --> AccountSvc
-    VBStrategy --> OrderSvc
-
-    StockSvc --> Auth
-    AccountSvc --> Auth
-    OrderSvc --> Auth
-
-    Auth --> HTTP
-    HTTP --> KIS
-    ConfigMgr --> YAML
+    Services --> KIS
+    Engine --> YAML
 ```
 
 ### 자동매매 엔진 흐름
@@ -492,20 +505,23 @@ flowchart TD
     Auth -->|No| AuthFail[인증 실패]
     Auth -->|Yes| Loop[메인 루프 시작]
 
-    Loop --> CheckDay{날짜 변경?}
-    CheckDay -->|Yes| ResetCount[일일 거래 횟수 초기화]
-    ResetCount --> GetStocks
-    CheckDay -->|No| GetStocks[활성 종목 조회]
+    Loop --> CheckStatus{상태 == RUNNING?}
+    CheckStatus -->|No| Sleep1[1초 대기]
+    Sleep1 --> Loop
+    CheckStatus -->|Yes| CheckDay{날짜 변경?}
 
-    GetStocks --> SortPriority[우선순위 정렬]
-    SortPriority --> ForEach{각 종목 처리}
+    CheckDay -->|Yes| ResetCount[일일 거래 횟수 초기화<br/>VB 캐시 초기화]
+    ResetCount --> GetStocks
+    CheckDay -->|No| GetStocks[활성 종목 조회<br/>우선순위순 정렬됨]
+
+    GetStocks --> ForEach{각 종목 처리}
 
     ForEach --> CheckInterval{모니터링 주기 도래?}
-    CheckInterval -->|No| ForEach
+    CheckInterval -->|No| NextStock
     CheckInterval -->|Yes| CheckStrategy{전략 확인}
 
-    CheckStrategy -->|Range| RangeProcess[범위 매매 처리]
-    CheckStrategy -->|VB| VBProcess[변동성 돌파 처리]
+    CheckStrategy -->|range_trading| RangeProcess[범위 매매 처리]
+    CheckStrategy -->|volatility_breakout| VBProcess[변동성 돌파 처리]
 
     RangeProcess --> NextStock
     VBProcess --> NextStock
@@ -522,23 +538,25 @@ flowchart TD
 ```mermaid
 flowchart TD
     Start([범위 매매 시작]) --> GetPrice[현재가 조회]
-    GetPrice --> GetBalance[보유 수량 조회]
-    GetBalance --> UpdateStatus[상태 업데이트]
+    GetPrice --> GetBalance[계좌 잔고 조회]
+    GetBalance --> UpdateStatus[종목 상태 업데이트<br/>현재가, 보유수량, 평균단가]
 
-    UpdateStatus --> CheckLimit{일일 거래 제한?}
+    UpdateStatus --> CheckLimit{일일 거래 제한<br/>초과?}
     CheckLimit -->|Yes| End([종료])
     CheckLimit -->|No| CheckHolding{보유 중?}
 
-    CheckHolding -->|Yes| CheckSell{현재가 >= 매도가?}
-    CheckSell -->|Yes| ExecuteSell[매도 주문]
+    CheckHolding -->|Yes| CheckSell{현재가 >= sell_price?}
+    CheckSell -->|Yes| ExecuteSell[매도 주문<br/>보유 전량]
     CheckSell -->|No| End
 
-    CheckHolding -->|No| CheckBuy{현재가 <= 매수가?}
-    CheckBuy -->|Yes| CalcQty[매수 수량 계산]
-    CalcQty --> ExecuteBuy[매수 주문]
+    CheckHolding -->|No| CheckBuy{현재가 <= buy_price?}
+    CheckBuy -->|Yes| CalcQty[매수 가능 수량 계산<br/>min: max_amount/가격, 예수금/가격]
+    CalcQty --> CheckQty{수량 > 0?}
+    CheckQty -->|No| End
+    CheckQty -->|Yes| ExecuteBuy[매수 주문]
     CheckBuy -->|No| End
 
-    ExecuteSell --> LogTrade[거래 로그 기록]
+    ExecuteSell --> LogTrade[거래 로그 기록<br/>일일 거래 횟수 증가]
     ExecuteBuy --> LogTrade
     LogTrade --> End
 ```
@@ -549,11 +567,11 @@ flowchart TD
 flowchart TD
     Start([변동성 돌파 시작]) --> CheckTime{장 운영시간?<br/>09:00~15:20}
     CheckTime -->|No| End([종료])
-    CheckTime -->|Yes| LoadData{일별 데이터 로드됨?}
+    CheckTime -->|Yes| CheckCache{VB 데이터 캐시됨?}
 
-    LoadData -->|No| FetchDaily[전일 고가/저가 조회]
+    CheckCache -->|No| FetchDaily[전일 고가/저가/당일 시가 조회]
     FetchDaily --> CalcTarget
-    LoadData -->|Yes| CalcTarget[목표가 계산<br/>시가 + Range × K]
+    CheckCache -->|Yes| CalcTarget[목표가 계산<br/>시가 + 전일Range × K]
 
     CalcTarget --> GetPrice[현재가 조회]
     GetPrice --> GetBalance[보유 수량 조회]
@@ -564,13 +582,15 @@ flowchart TD
     CheckLimit -->|No| CheckHolding{보유 중?}
 
     CheckHolding -->|Yes| CalcProfit[수익률 계산]
-    CalcProfit --> CheckTarget{수익률 >= 목표?}
-    CheckTarget -->|Yes| ExecuteSell[매도 - 목표 달성]
-    CheckTarget -->|No| CheckStop{수익률 <= 손절?}
+    CalcProfit --> CheckTarget{수익률 >= target_profit_rate?}
+    CheckTarget -->|Yes| ExecuteSell[매도 - 익절]
+    CheckTarget -->|No| CheckStop{수익률 <= stop_loss_rate?}
     CheckStop -->|Yes| ExecuteStopLoss[매도 - 손절]
-    CheckStop -->|No| CheckClose{15:15 이후?}
-    CheckClose -->|Yes| ExecuteClose[매도 - 장마감]
-    CheckClose -->|No| End
+    CheckStop -->|No| CheckCloseOption{sell_at_close<br/>옵션 활성?}
+    CheckCloseOption -->|No| End
+    CheckCloseOption -->|Yes| CheckCloseTime{15:15 이후?}
+    CheckCloseTime -->|Yes| ExecuteClose[매도 - 장마감]
+    CheckCloseTime -->|No| End
 
     CheckHolding -->|No| CheckBought{당일 매수 완료?}
     CheckBought -->|Yes| End
@@ -586,7 +606,7 @@ flowchart TD
     LogTrade --> End
 ```
 
-### Web UI 흐름
+### Desktop UI 흐름
 
 ```mermaid
 flowchart LR
@@ -594,7 +614,7 @@ flowchart LR
         Status[엔진 상태]
         Stats[거래 통계]
         StockList[종목 현황]
-        Realtime[실시간 갱신]
+        RecentTrades[최근 거래]
     end
 
     subgraph 설정
@@ -607,32 +627,44 @@ flowchart LR
 
     subgraph 거래로그
         ViewLogs[로그 조회]
-        FilterLogs[필터링]
     end
 
-    Status -->|시작/정지| Engine[Trading Engine]
+    subgraph 백테스트
+        SetParams[파라미터 설정]
+        SelectData[데이터 단위 선택<br/>일봉/분봉]
+        RunBacktest[백테스트 실행]
+        ViewChart[차트 & 결과 조회]
+    end
+
+    Status -->|시작/정지/일시정지| Engine[Trading Engine]
     StockList -->|토글| Engine
     AddStock -->|저장| YAML[(YAML 설정)]
     ManageStock -->|삭제| YAML
-    Engine -->|상태| Realtime
+    Engine -->|상태| Stats
     Engine -->|기록| ViewLogs
+    RunBacktest -->|Mock/실제 데이터| ViewChart
 ```
 
-### API 엔드포인트
+### IPC 메서드 (JSON-RPC)
 
-| 엔드포인트 | 메서드 | 설명 |
-|------------|--------|------|
-| `/api/engine/start` | POST | 엔진 시작 |
-| `/api/engine/stop` | POST | 엔진 정지 |
-| `/api/engine/pause` | POST | 일시정지 |
-| `/api/engine/resume` | POST | 재개 |
-| `/api/engine/status` | GET | 상태 조회 |
-| `/api/stocks` | GET | 종목 목록 |
-| `/api/stocks` | POST | 종목 추가 |
-| `/api/stocks/{code}/toggle` | POST | 활성화 토글 |
-| `/api/stocks/{code}/delete` | POST | 종목 삭제 |
-| `/api/logs` | GET | 거래 로그 |
-| `/api/backtest/run` | POST | 백테스트 실행 |
+| 메서드 | 설명 |
+|--------|------|
+| `ping` | 헬스 체크 |
+| `engine.start` | 엔진 시작 |
+| `engine.stop` | 엔진 정지 |
+| `engine.pause` | 일시정지 |
+| `engine.resume` | 재개 |
+| `engine.status` | 상태 조회 |
+| `stocks.list` | 종목 목록 |
+| `stocks.add` | 종목 추가 |
+| `stocks.update` | 종목 수정 |
+| `stocks.delete` | 종목 삭제 |
+| `stocks.toggle` | 활성화 토글 |
+| `logs.get` | 거래 로그 |
+| `backtest.run` | 백테스트 실행 |
+| `config.get` | 설정 조회 |
+| `config.save` | 설정 저장 |
+| `config.reload` | 설정 다시 로드 |
 
 ## 백테스트 (Backtest)
 
@@ -672,11 +704,11 @@ python main.py backtest 005930 20241101 20241130 \
 python main.py backtest 005930 20241101 20241130 --mock -s volatility_breakout
 ```
 
-### 웹 UI 백테스트
+### 데스크톱 앱 백테스트
 
-웹 UI에서도 백테스트를 실행할 수 있습니다:
+데스크톱 앱에서 백테스트를 실행할 수 있습니다:
 
-1. http://localhost:8000/backtest 접속
+1. 앱 실행 후 "백테스트" 메뉴 클릭
 2. 종목코드, 기간, 자본금 입력
 3. 전략 선택 (범위 매매 / 변동성 돌파)
 4. 데이터 단위 선택 (일봉 / 분봉)
@@ -766,28 +798,42 @@ print(f"승률: {result.win_rate:.1f}%")
 
 ```mermaid
 flowchart TD
-    Start([백테스트 시작]) --> LoadData[과거 데이터 로드]
-    LoadData --> InitState[상태 초기화<br/>cash, position]
+    Start([백테스트 시작]) --> LoadDaily[일봉 데이터 로드]
+    LoadDaily --> CheckMode{분봉 모드?}
 
-    InitState --> ForEach{각 거래일 처리}
-    ForEach --> UpdateCapital[현재 자본 평가]
-    UpdateCapital --> CalcDrawdown[최대 낙폭 계산]
+    CheckMode -->|No| InitDaily[상태 초기화]
+    CheckMode -->|Yes| InitMinute[상태 초기화]
 
-    CalcDrawdown --> CheckPosition{보유 중?}
-    CheckPosition -->|No| CheckBuy{매수 조건?}
-    CheckBuy -->|Yes| ExecuteBuy[매수 실행]
-    CheckBuy -->|No| NextDay
+    subgraph DailyMode["일봉 시뮬레이션"]
+        InitDaily --> ForDay{각 거래일}
+        ForDay --> DayCapital[자본 평가 & 낙폭 계산]
+        DayCapital --> DayCheck{매수/매도 조건}
+        DayCheck -->|매수| DayBuy[매수 실행]
+        DayCheck -->|매도| DaySell[매도 실행]
+        DayCheck -->|없음| DayNext
+        DayBuy --> DayNext[다음 날]
+        DaySell --> DayNext
+        DayNext -->|있음| ForDay
+    end
 
-    CheckPosition -->|Yes| CheckSell{매도 조건?}
-    CheckSell -->|Yes| ExecuteSell[매도 실행]
-    CheckSell -->|No| NextDay
+    subgraph MinuteMode["분봉 시뮬레이션"]
+        InitMinute --> ForDayM{각 거래일}
+        ForDayM --> LoadMinute[해당일 분봉 로드]
+        LoadMinute --> ForMin{각 분봉}
+        ForMin --> MinCapital[자본 평가 & 낙폭 계산]
+        MinCapital --> MinCheck{매수/매도 조건}
+        MinCheck -->|매수| MinBuy[매수 실행]
+        MinCheck -->|매도| MinSell[매도 실행]
+        MinCheck -->|없음| MinNext
+        MinBuy --> MinNext[다음 분봉]
+        MinSell --> MinNext
+        MinNext -->|있음| ForMin
+        MinNext -->|없음| DayNextM[다음 날]
+        DayNextM -->|있음| ForDayM
+    end
 
-    ExecuteBuy --> RecordTrade[거래 기록]
-    ExecuteSell --> RecordTrade
-    RecordTrade --> NextDay{다음 거래일?}
-
-    NextDay -->|Yes| ForEach
-    NextDay -->|No| CalcResult[결과 계산<br/>수익률, 승률]
+    DayNext -->|없음| CalcResult[결과 계산<br/>수익률, 승률, 최대낙폭]
+    DayNextM -->|없음| CalcResult
     CalcResult --> End([결과 반환])
 ```
 
@@ -795,7 +841,7 @@ flowchart TD
 
 ### Authentication failed 에러
 
-웹 UI에서 `시작` 버튼 클릭 시 `Authentication failed` 에러가 발생하는 경우:
+데스크톱 앱에서 `시작` 버튼 클릭 시 `Authentication failed` 에러가 발생하는 경우:
 
 ```
 2025-12-16 14:55:24,457 [ERROR] Authentication failed
@@ -811,7 +857,7 @@ flowchart TD
    APP_KEY=new_app_key
    APP_SECRET=new_app_secret
    ```
-4. 웹 서버 재시작 후 다시 시도
+4. 앱 재시작 후 다시 시도
 
 ### 토큰 발급 제한 에러
 

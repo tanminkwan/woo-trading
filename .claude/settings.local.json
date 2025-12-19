@@ -18,7 +18,29 @@
       "Bash(git branch:*)",
       "Bash(git push:*)",
       "Bash(python -m pytest tests/ -v --cov=src --cov-report=term-missing)",
-      "Bash(python -m pytest:*)"
+      "Bash(python -m pytest:*)",
+      "Bash(python:*)",
+      "Bash(cd:*)",
+      "Bash(git checkout:*)",
+      "Bash(git pull:*)",
+      "Bash(mkdir:*)",
+      "Bash(npm install:*)",
+      "Bash(npm config set:*)",
+      "Bash(set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/)",
+      "Bash(node:*)",
+      "Bash(ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ node:*)",
+      "Bash(ELECTRON_MIRROR=https://cdn.npmmirror.com/binaries/electron/ node:*)",
+      "Bash(cat:*)",
+      "Bash(npm run build:*)",
+      "Bash(printf:*)",
+      "Bash(pip show:*)",
+      "Bash(npm run dist:win:*)",
+      "Bash(start \"\" \"C:/GitHub/auto-stock/electron/dist/AutoStock Setup 1.0.0.exe\")",
+      "Bash(\"C:/Users/tiffanie.kim/AppData/Local/Programs/AutoStock/resources/python-backend/backend.exe\")",
+      "Bash(echo:*)",
+      "Bash(backend.exe:*)",
+      "Bash(cmd /c:*)",
+      "Bash(\"C:/GitHub/auto-stock/dist-python/backend.exe\")"
     ]
   }
 }

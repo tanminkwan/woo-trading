@@ -57,6 +57,20 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
+# Node.js / Electron
+node_modules/
+electron/node_modules/
+electron/renderer/node_modules/
+electron/dist/
+electron/renderer/dist/
+package-lock.json
+electron/package-lock.json
+electron/renderer/package-lock.json
+
+# 빌드 결과물
+dist-python/
+*.spec
+
 # 기존 레거시 파일
 한투.txt
 
